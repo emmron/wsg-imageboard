@@ -1,0 +1,357 @@
+---
+import { inject } from '@vercel/analytics';
+
+export interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+
+// Inject analytics
+inject();
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="description" content="/wsg/ - Video Sharing General" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <div id="app">
+      <slot />
+    </div>
+  </body>
+</html>
+
+<style is:global>
+  /* Classic 4chan Imageboard Styling */
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 13px;
+    background: #d6daf0;
+    color: #000000;
+    line-height: 1.3;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Board Header */
+  .board-header {
+    background: #9988ee;
+    border: 1px solid #9988ee;
+    padding: 10px;
+    text-align: center;
+    margin: 5px;
+  }
+
+  .board-title {
+    font-size: 24px;
+    font-weight: bold;
+    color: #000000;
+    text-decoration: none;
+  }
+
+  .board-subtitle {
+    font-size: 14px;
+    color: #000000;
+    margin-top: 5px;
+  }
+
+  /* Navigation */
+  .board-nav {
+    background: #d6daf0;
+    padding: 5px 10px;
+    border-bottom: 1px solid #9988ee;
+    text-align: center;
+  }
+
+  .board-nav a {
+    color: #34345c;
+    text-decoration: none;
+    margin: 0 5px;
+    font-size: 11px;
+  }
+
+  .board-nav a:hover {
+    color: #dd0000;
+    text-decoration: underline;
+  }
+
+  /* Post Form */
+  .post-form {
+    background: #f0e0d6;
+    border: 1px solid #d9bfb7;
+    margin: 5px;
+    padding: 10px;
+  }
+
+  .post-form table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .post-form td {
+    padding: 2px 5px;
+    vertical-align: top;
+  }
+
+  .post-form input,
+  .post-form textarea,
+  .post-form select {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 11px;
+    border: 1px solid #aaaaaa;
+    padding: 2px;
+  }
+
+  .post-form input[type="text"],
+  .post-form textarea {
+    background: #ffffff;
+  }
+
+  .post-form input[type="submit"] {
+    background: #cccccc;
+    cursor: pointer;
+    padding: 3px 8px;
+  }
+
+  .post-form input[type="submit"]:hover {
+    background: #bbbbbb;
+  }
+
+  /* Thread/Post Container */
+  .thread {
+    margin: 5px;
+    clear: both;
+  }
+
+  .post {
+    background: #f0e0d6;
+    border: 1px solid #d9bfb7;
+    margin: 2px 0;
+    padding: 5px;
+    overflow: hidden;
+  }
+
+  .post.op {
+    background: #f0e0d6;
+  }
+
+  .post.reply {
+    background: #f0e0d6;
+    margin-left: 20px;
+  }
+
+  /* Post Header */
+  .post-header {
+    font-size: 11px;
+    color: #117743;
+    margin-bottom: 5px;
+  }
+
+  .post-name {
+    color: #117743;
+    font-weight: bold;
+  }
+
+  .post-trip {
+    color: #228854;
+  }
+
+  .post-capcode {
+    color: #ff0000;
+    font-weight: bold;
+  }
+
+  .post-time {
+    color: #000000;
+  }
+
+  .post-number {
+    color: #000000;
+    text-decoration: none;
+  }
+
+  .post-number:hover {
+    color: #dd0000;
+    text-decoration: underline;
+  }
+
+  /* Post Content */
+  .post-file {
+    float: left;
+    margin: 0 10px 5px 0;
+  }
+
+  .file-info {
+    font-size: 11px;
+    color: #000000;
+    margin-bottom: 2px;
+  }
+
+  .file-info a {
+    color: #34345c;
+    text-decoration: none;
+  }
+
+  .file-info a:hover {
+    color: #dd0000;
+    text-decoration: underline;
+  }
+
+  .file-thumb {
+    border: none;
+    max-width: 250px;
+    max-height: 250px;
+  }
+
+  .file-thumb:hover {
+    opacity: 0.8;
+  }
+
+  .post-message {
+    font-size: 13px;
+    line-height: 1.3;
+    word-wrap: break-word;
+    margin: 0;
+  }
+
+  .post-subject {
+    color: #0f0c5d;
+    font-weight: bold;
+    font-size: 13px;
+  }
+
+  /* Quote styling */
+  .quote {
+    color: #789922;
+  }
+
+  .quotelink {
+    color: #dd0000;
+    text-decoration: none;
+  }
+
+  .quotelink:hover {
+    color: #dd0000;
+    text-decoration: underline;
+  }
+
+  /* Anonymous styling */
+  .anonymous {
+    color: #117743;
+    font-weight: bold;
+  }
+
+  /* Buttons */
+  .button {
+    background: #cccccc;
+    border: 1px solid #aaaaaa;
+    padding: 2px 6px;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: Arial, Helvetica, sans-serif;
+  }
+
+  .button:hover {
+    background: #bbbbbb;
+  }
+
+  /* Links */
+  a {
+    color: #34345c;
+    text-decoration: none;
+  }
+
+  a:hover {
+    color: #dd0000;
+    text-decoration: underline;
+  }
+
+  a:visited {
+    color: #34345c;
+  }
+
+  /* Video thumbnail styling */
+  .video-thumb {
+    border: none;
+    cursor: pointer;
+    max-width: 250px;
+    max-height: 250px;
+  }
+
+  .video-thumb:hover {
+    opacity: 0.8;
+  }
+
+  /* File upload styling */
+  .file-input {
+    font-size: 11px;
+    margin: 2px 0;
+  }
+
+  /* Modal overlay for video */
+  .video-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .video-modal video {
+    max-width: 90%;
+    max-height: 90%;
+  }
+
+  /* Error messages */
+  .error {
+    color: #ff0000;
+    font-weight: bold;
+    font-size: 11px;
+    margin: 5px 0;
+  }
+
+  /* Success messages */
+  .success {
+    color: #117743;
+    font-weight: bold;
+    font-size: 11px;
+    margin: 5px 0;
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    body {
+      font-size: 12px;
+    }
+    
+    .post {
+      margin-left: 0 !important;
+    }
+    
+    .post-file {
+      float: none;
+      margin: 0 0 5px 0;
+    }
+    
+    .file-thumb {
+      max-width: 100%;
+    }
+  }
+</style>

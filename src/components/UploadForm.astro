@@ -1,0 +1,937 @@
+---
+// UploadForm component for video uploading
+---
+
+<div class="upload-form">
+  <div class="file-drop" id="file-drop">
+    <div class="file-selected" id="file-selected" style="display: none;">
+      <div class="file-preview" id="file-preview">
+        <video class="preview-video" id="preview-video" muted></video>
+        <div class="file-info">
+          <div class="file-name" id="file-name">✓ </div>
+          <div class="file-details" id="file-details"></div>
+        </div>
+      </div>
+      <button type="button" class="remove-btn" id="remove-file">Remove</button>
+    </div>
+    
+    <div class="drop-zone" id="drop-zone">
+      <div class="drop-idle" id="drop-idle">
+        <div class="drop-icon">📁</div>
+        <p>Drop video file here or click to select</p>
+        <small>Supports MP4, WebM, AVI • Max 500MB</small>
+      </div>
+      <div class="drop-active" id="drop-active" style="display: none;">
+        <div class="drop-icon active">⬇️</div>
+        <p>Release to upload your video</p>
+      </div>
+      <input 
+        type="file" 
+        accept="video/*" 
+        style="display: none;"
+        id="file-input"
+      />
+      <button type="button" class="choose-file-btn" id="choose-file-btn">
+        Choose File
+      </button>
+    </div>
+  </div>
+  
+  <div class="form-group">
+    <label for="title">Title</label>
+    <input 
+      type="text" 
+      id="title"
+      placeholder="Enter video title..."
+      required
+    />
+  </div>
+  
+  <div class="form-group">
+    <label for="tags">Tags</label>
+    <input 
+      type="text" 
+      id="tags"
+      placeholder="tag1, tag2, tag3..."
+    />
+    <small>Separate tags with commas</small>
+  </div>
+  
+  <div class="validation-messages" id="validation-errors" style="display: none;">
+  </div>
+  
+  <div class="validation-messages warnings" id="validation-warnings" style="display: none;">
+    <button type="button" class="guidelines-btn" id="guidelines-btn">
+      View Community Guidelines
+    </button>
+  </div>
+  
+  <div class="guidelines" id="guidelines" style="display: none;">
+    <h4>Community Guidelines</h4>
+    <ul>
+      <li>Only upload content you own or have permission to share</li>
+      <li>No leaked, stolen, or unauthorized content</li>
+      <li>No content involving minors</li>
+      <li>Respect privacy - no personal/private content without consent</li>
+      <li>Keep titles and tags appropriate</li>
+      <li>Max file size: 500MB</li>
+    </ul>
+  </div>
+  
+  <div class="upload-progress" id="upload-progress" style="display: none;">
+    <div class="progress-bar">
+      <div class="progress-fill" id="progress-fill"></div>
+    </div>
+    <p id="progress-text">Uploading... 0%</p>
+  </div>
+  
+  <div class="success-message" id="success-message" style="display: none;">
+    ✓ Video uploaded successfully!
+  </div>
+  
+  <button 
+    type="button"
+    class="upload-btn"
+    id="upload-btn"
+    disabled
+  >
+    Upload Video
+  </button>
+</div>
+
+<script>
+  import { addVideo } from '../lib/stores.ts';
+  import { generateHash, generateAnonymousHash } from '../lib/utils.ts';
+  import { validateFile, validateTitle, validateTags, sanitizeText, type ValidationResult } from '../lib/validation.ts';
+
+  class UploadForm {
+    private form: HTMLElement;
+    private fileDrop: HTMLElement;
+    private fileInput: HTMLInputElement;
+    private fileSelected: HTMLElement;
+    private dropZone: HTMLElement;
+    private dropIdle: HTMLElement;
+    private dropActive: HTMLElement;
+    private titleInput: HTMLInputElement;
+    private tagsInput: HTMLInputElement;
+    private uploadBtn: HTMLButtonElement;
+    private removeBtn: HTMLButtonElement;
+    private chooseFileBtn: HTMLButtonElement;
+    private guidelinesBtn: HTMLButtonElement;
+    private guidelines: HTMLElement;
+    private validationErrors: HTMLElement;
+    private validationWarnings: HTMLElement;
+    private uploadProgress: HTMLElement;
+    private progressFill: HTMLElement;
+    private progressText: HTMLElement;
+    private successMessage: HTMLElement;
+    private previewVideo: HTMLVideoElement;
+    private fileName: HTMLElement;
+    private fileDetails: HTMLElement;
+
+    private selectedFile: File | null = null;
+    private dragCounter = 0;
+    private uploading = false;
+
+    constructor(formElement: HTMLElement) {
+      this.form = formElement;
+      this.initializeElements();
+      this.setupEventListeners();
+    }
+
+    private initializeElements() {
+      this.fileDrop = this.form.querySelector('#file-drop') as HTMLElement;
+      this.fileInput = this.form.querySelector('#file-input') as HTMLInputElement;
+      this.fileSelected = this.form.querySelector('#file-selected') as HTMLElement;
+      this.dropZone = this.form.querySelector('#drop-zone') as HTMLElement;
+      this.dropIdle = this.form.querySelector('#drop-idle') as HTMLElement;
+      this.dropActive = this.form.querySelector('#drop-active') as HTMLElement;
+      this.titleInput = this.form.querySelector('#title') as HTMLInputElement;
+      this.tagsInput = this.form.querySelector('#tags') as HTMLInputElement;
+      this.uploadBtn = this.form.querySelector('#upload-btn') as HTMLButtonElement;
+      this.removeBtn = this.form.querySelector('#remove-file') as HTMLButtonElement;
+      this.chooseFileBtn = this.form.querySelector('#choose-file-btn') as HTMLButtonElement;
+      this.guidelinesBtn = this.form.querySelector('#guidelines-btn') as HTMLButtonElement;
+      this.guidelines = this.form.querySelector('#guidelines') as HTMLElement;
+      this.validationErrors = this.form.querySelector('#validation-errors') as HTMLElement;
+      this.validationWarnings = this.form.querySelector('#validation-warnings') as HTMLElement;
+      this.uploadProgress = this.form.querySelector('#upload-progress') as HTMLElement;
+      this.progressFill = this.form.querySelector('#progress-fill') as HTMLElement;
+      this.progressText = this.form.querySelector('#progress-text') as HTMLElement;
+      this.successMessage = this.form.querySelector('#success-message') as HTMLElement;
+      this.previewVideo = this.form.querySelector('#preview-video') as HTMLVideoElement;
+      this.fileName = this.form.querySelector('#file-name') as HTMLElement;
+      this.fileDetails = this.form.querySelector('#file-details') as HTMLElement;
+    }
+
+    private setupEventListeners() {
+      // File selection
+      this.fileInput.addEventListener('change', this.handleFileSelect.bind(this));
+      this.chooseFileBtn.addEventListener('click', () => this.fileInput.click());
+      this.removeBtn.addEventListener('click', this.removeFile.bind(this));
+
+      // Drag and drop
+      this.fileDrop.addEventListener('dragenter', this.handleDragEnter.bind(this));
+      this.fileDrop.addEventListener('dragover', this.handleDragOver.bind(this));
+      this.fileDrop.addEventListener('dragleave', this.handleDragLeave.bind(this));
+      this.fileDrop.addEventListener('drop', this.handleDrop.bind(this));
+
+      // Form validation
+      this.titleInput.addEventListener('input', this.validateForm.bind(this));
+      this.tagsInput.addEventListener('input', this.validateForm.bind(this));
+
+      // Upload
+      this.uploadBtn.addEventListener('click', this.uploadVideo.bind(this));
+
+      // Guidelines
+      this.guidelinesBtn.addEventListener('click', this.toggleGuidelines.bind(this));
+    }
+
+    private handleFileSelect(event: Event) {
+      const target = event.target as HTMLInputElement;
+      const file = target.files?.[0];
+      if (file) {
+        this.processFile(file);
+      }
+    }
+
+    private handleDragEnter(event: DragEvent) {
+      event.preventDefault();
+      this.dragCounter++;
+      this.showDropActive();
+    }
+
+    private handleDragOver(event: DragEvent) {
+      event.preventDefault();
+    }
+
+    private handleDragLeave(event: DragEvent) {
+      event.preventDefault();
+      this.dragCounter--;
+      if (this.dragCounter === 0) {
+        this.hideDropActive();
+      }
+    }
+
+    private handleDrop(event: DragEvent) {
+      event.preventDefault();
+      this.dragCounter = 0;
+      this.hideDropActive();
+      
+      const file = event.dataTransfer?.files[0];
+      if (file) {
+        this.processFile(file);
+      }
+    }
+
+    private processFile(file: File) {
+      const validation = validateFile(file);
+      if (validation.valid) {
+        this.selectedFile = file;
+        this.showFileSelected(file);
+        this.validateForm();
+      } else {
+        this.showValidationErrors(validation.errors);
+      }
+    }
+
+    private showFileSelected(file: File) {
+      this.dropZone.style.display = 'none';
+      this.fileSelected.style.display = 'flex';
+
+      this.fileName.textContent = `✓ ${file.name}`;
+      this.fileDetails.textContent = `${this.formatFileSize(file.size)} • ${file.type}`;
+
+      if (file.type.startsWith('video/')) {
+        this.fileToDataURL(file).then(dataUrl => {
+          this.previewVideo.src = dataUrl;
+        });
+      }
+    }
+
+    private removeFile() {
+      this.selectedFile = null;
+      this.fileSelected.style.display = 'none';
+      this.dropZone.style.display = 'flex';
+      this.fileInput.value = '';
+      
+      if (this.previewVideo.src) {
+        URL.revokeObjectURL(this.previewVideo.src);
+        this.previewVideo.src = '';
+      }
+      
+      this.validateForm();
+    }
+
+    private showDropActive() {
+      this.fileDrop.classList.add('drag-over');
+      this.dropIdle.style.display = 'none';
+      this.dropActive.style.display = 'flex';
+    }
+
+    private hideDropActive() {
+      this.fileDrop.classList.remove('drag-over');
+      this.dropIdle.style.display = 'flex';
+      this.dropActive.style.display = 'none';
+    }
+
+    private validateForm() {
+      const errors: string[] = [];
+      const warnings: string[] = [];
+
+      // Validate title
+      if (this.titleInput.value.trim()) {
+        const titleValidation = validateTitle(this.titleInput.value);
+        errors.push(...titleValidation.errors);
+        warnings.push(...titleValidation.warnings);
+      }
+
+      // Validate tags
+      if (this.tagsInput.value.trim()) {
+        const tagsValidation = validateTags(this.tagsInput.value);
+        errors.push(...tagsValidation.errors);
+        warnings.push(...tagsValidation.warnings);
+      }
+
+      this.showValidationErrors(errors);
+      this.showValidationWarnings(warnings);
+
+      // Enable/disable upload button
+      const canUpload = this.selectedFile && 
+                       this.titleInput.value.trim() && 
+                       errors.length === 0 && 
+                       !this.uploading;
+      
+      this.uploadBtn.disabled = !canUpload;
+    }
+
+    private showValidationErrors(errors: string[]) {
+      if (errors.length > 0) {
+        this.validationErrors.innerHTML = errors
+          .map(error => `<div class="error-message">⚠ ${error}</div>`)
+          .join('');
+        this.validationErrors.style.display = 'block';
+        this.validationErrors.className = 'validation-messages errors';
+      } else {
+        this.validationErrors.style.display = 'none';
+      }
+    }
+
+    private showValidationWarnings(warnings: string[]) {
+      if (warnings.length > 0) {
+        const warningHtml = warnings
+          .map(warning => `<div class="warning-message">⚠ ${warning}</div>`)
+          .join('');
+        this.validationWarnings.innerHTML = warningHtml + 
+          '<button type="button" class="guidelines-btn" id="guidelines-btn-dynamic">View Community Guidelines</button>';
+        this.validationWarnings.style.display = 'block';
+        
+        // Re-attach guidelines button event
+        const dynamicBtn = this.validationWarnings.querySelector('#guidelines-btn-dynamic') as HTMLButtonElement;
+        if (dynamicBtn) {
+          dynamicBtn.addEventListener('click', this.toggleGuidelines.bind(this));
+        }
+      } else {
+        this.validationWarnings.style.display = 'none';
+      }
+    }
+
+    private toggleGuidelines() {
+      const isVisible = this.guidelines.style.display !== 'none';
+      this.guidelines.style.display = isVisible ? 'none' : 'block';
+    }
+
+    private async uploadVideo() {
+      if (!this.selectedFile || !this.titleInput.value.trim()) return;
+
+      // Final validation
+      const titleValidation = validateTitle(this.titleInput.value);
+      const tagsValidation = validateTags(this.tagsInput.value);
+      const fileValidation = validateFile(this.selectedFile);
+
+      if (!titleValidation.valid || !tagsValidation.valid || !fileValidation.valid) {
+        this.showValidationErrors([
+          ...titleValidation.errors,
+          ...tagsValidation.errors,
+          ...fileValidation.errors
+        ]);
+        return;
+      }
+
+      this.uploading = true;
+      this.uploadBtn.disabled = true;
+      this.uploadBtn.innerHTML = '<div class="btn-spinner"></div> Uploading...';
+      this.uploadProgress.style.display = 'block';
+
+      try {
+        // Simulate upload progress
+        for (let i = 0; i <= 100; i += 10) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          this.progressFill.style.width = `${i}%`;
+          this.progressText.textContent = `Uploading... ${i}%`;
+        }
+
+        // Convert file to data URL for persistence
+        const videoUrl = await this.fileToDataURL(this.selectedFile);
+
+        // Create video object with sanitized data
+        const newVideo = {
+          id: generateHash(this.titleInput.value + Date.now()),
+          uploaderHash: generateAnonymousHash(),
+          title: sanitizeText(this.titleInput.value.trim()),
+          url: videoUrl,
+          tags: tagsValidation.cleanTags || [],
+          timestamp: Date.now(),
+          comments: []
+        };
+
+        // Add to store
+        addVideo(newVideo);
+
+        // Show success and reset form
+        this.showSuccess();
+        this.resetForm();
+
+        // Dispatch upload complete event
+        window.dispatchEvent(new CustomEvent('upload-complete'));
+
+      } catch (error) {
+        console.error('Upload failed:', error);
+        this.uploading = false;
+        this.uploadBtn.disabled = false;
+        this.uploadBtn.textContent = 'Upload Video';
+        this.uploadProgress.style.display = 'none';
+      }
+    }
+
+    private showSuccess() {
+      this.successMessage.style.display = 'block';
+      setTimeout(() => {
+        this.successMessage.style.display = 'none';
+      }, 3000);
+    }
+
+    private resetForm() {
+      this.titleInput.value = '';
+      this.tagsInput.value = '';
+      this.removeFile();
+      this.uploading = false;
+      this.uploadBtn.disabled = true;
+      this.uploadBtn.textContent = 'Upload Video';
+      this.uploadProgress.style.display = 'none';
+      this.validationErrors.style.display = 'none';
+      this.validationWarnings.style.display = 'none';
+      this.guidelines.style.display = 'none';
+    }
+
+    private fileToDataURL(file: File): Promise<string> {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    private formatFileSize(bytes: number): string {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+  }
+
+  // Initialize upload form
+  document.addEventListener('DOMContentLoaded', () => {
+    const uploadForm = document.querySelector('.upload-form');
+    if (uploadForm) {
+      new UploadForm(uploadForm as HTMLElement);
+    }
+  });
+</script>
+
+<style>
+  .upload-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .file-drop {
+    border: 2px dashed rgba(85, 85, 85, 0.8);
+    border-radius: 16px;
+    padding: clamp(1.5rem, 4vw, 2rem);
+    text-align: center;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    background: rgba(45, 45, 45, 0.3);
+    backdrop-filter: blur(16px) saturate(150%);
+    overflow: hidden;
+    isolation: isolate;
+    will-change: transform, border-color;
+  }
+
+  .file-drop::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: 
+      linear-gradient(45deg, transparent 30%, rgba(74, 222, 128, 0.1) 50%, transparent 70%),
+      radial-gradient(circle at 30% 40%, rgba(74, 222, 128, 0.06) 0%, transparent 50%);
+    transform: translateX(-100%) rotate(-5deg);
+    transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    pointer-events: none;
+    border-radius: 16px;
+    opacity: 0;
+  }
+
+  .file-drop::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 0;
+    height: 0;
+    background: radial-gradient(circle, rgba(74, 222, 128, 0.2) 0%, transparent 70%);
+    border-radius: 50%;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    pointer-events: none;
+    opacity: 0;
+  }
+
+  .file-drop.drag-over {
+    border-color: #4ade80;
+    background: rgba(74, 222, 128, 0.15);
+    transform: scale(1.025) rotateX(2deg) rotateY(1deg);
+    box-shadow: 
+      0 1px 0 rgba(255, 255, 255, 0.1) inset,
+      0 16px 64px rgba(74, 222, 128, 0.25),
+      0 8px 32px rgba(0, 0, 0, 0.2),
+      0 0 0 2px rgba(74, 222, 128, 0.4);
+    backdrop-filter: blur(24px) saturate(200%);
+  }
+
+  .file-drop.drag-over::before {
+    transform: translateX(100%) rotate(0deg);
+    opacity: 1;
+  }
+
+  .file-drop.drag-over::after {
+    width: 100%;
+    height: 100%;
+    opacity: 1;
+  }
+
+  .drop-zone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .drop-idle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .drop-active {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    color: #4ade80;
+  }
+
+  .drop-icon {
+    font-size: clamp(2.5rem, 6vw, 3rem);
+    opacity: 0.6;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    filter: brightness(0.9);
+    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .drop-icon.active {
+    font-size: clamp(3.5rem, 8vw, 4rem);
+    opacity: 1;
+    animation: bounce 0.8s cubic-bezier(0.16, 1, 0.3, 1) infinite alternate;
+    filter: brightness(1.2) drop-shadow(0 0 12px rgba(74, 222, 128, 0.6));
+    transform: rotateY(15deg) rotateX(5deg);
+  }
+
+  @keyframes bounce {
+    0% { 
+      transform: translateY(0) rotateY(15deg) rotateX(5deg); 
+      filter: brightness(1.2) drop-shadow(0 0 12px rgba(74, 222, 128, 0.6));
+    }
+    100% { 
+      transform: translateY(-12px) rotateY(15deg) rotateX(5deg) scale(1.05); 
+      filter: brightness(1.3) drop-shadow(0 0 16px rgba(74, 222, 128, 0.8));
+    }
+  }
+
+  .drop-zone p {
+    margin: 0;
+    color: #999;
+  }
+
+  .drop-zone small {
+    color: #999;
+    font-size: 0.8rem;
+    margin-top: -0.5rem;
+  }
+
+  .choose-file-btn {
+    background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+    color: #000;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(74, 222, 128, 0.3);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .choose-file-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(74, 222, 128, 0.4);
+  }
+
+  .file-selected {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(74, 222, 128, 0.1);
+    border: 1px solid rgba(74, 222, 128, 0.3);
+    padding: 1.25rem;
+    border-radius: 12px;
+    backdrop-filter: blur(10px);
+  }
+
+  .file-preview {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex: 1;
+  }
+
+  .preview-video {
+    width: 60px;
+    height: 45px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .file-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .file-name {
+    color: #4ade80;
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+
+  .file-details {
+    color: #999;
+    font-size: 0.8rem;
+  }
+
+  .remove-btn {
+    background: rgba(220, 38, 38, 0.2);
+    color: #dc2626;
+    border: 1px solid rgba(220, 38, 38, 0.3);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  .remove-btn:hover {
+    background: #dc2626;
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .form-group label {
+    color: #4ade80;
+    font-weight: 500;
+  }
+
+  .form-group input {
+    background: rgba(64, 64, 64, 0.8);
+    border: 1px solid rgba(85, 85, 85, 0.8);
+    color: #fff;
+    padding: clamp(0.7rem, 2vw, 0.8rem) clamp(0.9rem, 2.5vw, 1rem);
+    border-radius: 8px;
+    font-size: clamp(0.9rem, 2.5vw, 1rem);
+    backdrop-filter: blur(10px) saturate(150%);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: transform, border-color, box-shadow;
+  }
+
+  .form-group input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+    transition: color 0.2s ease;
+  }
+
+  .form-group input:focus {
+    outline: none;
+    border-color: #4ade80;
+    background: rgba(74, 222, 128, 0.1);
+    box-shadow: 
+      0 0 0 3px rgba(74, 222, 128, 0.2),
+      0 4px 16px rgba(74, 222, 128, 0.1);
+    transform: translateY(-1px) scale(1.005);
+  }
+
+  .form-group input:focus::placeholder {
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  @media (hover: hover) {
+    .form-group input:hover:not(:focus) {
+      border-color: rgba(128, 128, 128, 0.9);
+      background: rgba(64, 64, 64, 0.9);
+      transform: translateY(-0.5px);
+    }
+  }
+
+  .form-group small {
+    color: #999;
+    font-size: 0.8rem;
+  }
+
+  .validation-messages {
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .validation-messages.errors {
+    background: rgba(220, 38, 38, 0.1);
+    border: 1px solid #dc2626;
+  }
+
+  .validation-messages.warnings {
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid #f59e0b;
+  }
+
+  .error-message {
+    color: #fca5a5;
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .warning-message {
+    color: #fbbf24;
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .guidelines-btn {
+    background: #f59e0b;
+    color: #000;
+    border: none;
+    padding: 0.3rem 0.8rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    margin-top: 0.5rem;
+  }
+
+  .guidelines-btn:hover {
+    background: #d97706;
+  }
+
+  .guidelines {
+    background: #2d2d2d;
+    border: 1px solid #555;
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .guidelines h4 {
+    margin: 0 0 0.8rem 0;
+    color: #4ade80;
+  }
+
+  .guidelines ul {
+    margin: 0;
+    padding-left: 1.2rem;
+    color: #ccc;
+  }
+
+  .guidelines li {
+    margin-bottom: 0.3rem;
+    font-size: 0.9rem;
+  }
+
+  .upload-progress {
+    background: rgba(45, 45, 45, 0.8);
+    border: 1px solid #555;
+    border-radius: 12px;
+    padding: 1.5rem;
+    text-align: center;
+    backdrop-filter: blur(10px);
+  }
+
+  .progress-bar {
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+    position: relative;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #4ade80 0%, #22c55e 100%);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+    width: 0%;
+  }
+
+  .success-message {
+    background: rgba(74, 222, 128, 0.2);
+    border: 1px solid rgba(74, 222, 128, 0.4);
+    color: #4ade80;
+    padding: 1rem;
+    border-radius: 8px;
+    text-align: center;
+    font-weight: 600;
+    backdrop-filter: blur(10px);
+  }
+
+  .upload-btn {
+    background: linear-gradient(135deg, #4ade80 0%, #22c55e 50%, #16a34a 100%);
+    color: #000;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: clamp(0.875rem, 2.5vw, 1rem) clamp(1.75rem, 4vw, 2rem);
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: clamp(0.9rem, 2.5vw, 1rem);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(0.4rem, 1vw, 0.5rem);
+    box-shadow: 
+      0 4px 16px rgba(74, 222, 128, 0.3),
+      0 2px 4px rgba(74, 222, 128, 0.2) inset;
+    backdrop-filter: blur(10px) saturate(150%);
+    will-change: transform, box-shadow;
+  }
+
+  .upload-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.3),
+      transparent
+    );
+    transition: left 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .upload-btn::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 0;
+    height: 0;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, transparent 70%);
+    border-radius: 50%;
+    opacity: 0;
+    transition: all 0.3s ease;
+  }
+
+  .upload-btn:hover:not(:disabled) {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 
+      0 12px 40px rgba(74, 222, 128, 0.4),
+      0 6px 20px rgba(0, 0, 0, 0.2),
+      0 4px 8px rgba(74, 222, 128, 0.3) inset;
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 50%, #15803d 100%);
+  }
+
+  .upload-btn:hover:not(:disabled)::before {
+    left: 100%;
+  }
+
+  .upload-btn:hover:not(:disabled)::after {
+    width: 100%;
+    height: 100%;
+    opacity: 1;
+  }
+
+  .upload-btn:active:not(:disabled) {
+    transform: translateY(-1px) scale(1.01);
+    transition-duration: 0.1s;
+  }
+
+  .upload-btn:disabled {
+    background: rgba(85, 85, 85, 0.6);
+    color: rgba(153, 153, 153, 0.8);
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+    border-color: rgba(85, 85, 85, 0.4);
+  }
+
+  .upload-btn:focus-visible:not(:disabled) {
+    outline: 2px solid #4ade80;
+    outline-offset: 2px;
+  }
+
+  .btn-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid transparent;
+    border-top: 2px solid currentColor;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+</style>

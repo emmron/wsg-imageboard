@@ -1,0 +1,274 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="/wsg/ - Video Sharing General">
+  <!-- Board Header -->
+  <div class="board-header">
+    <a href="/" class="board-title">/wsg/ - Video Sharing General</a>
+    <div class="board-subtitle">Post webms, mp4s, share videos anonymously</div>
+  </div>
+
+  <!-- Board Navigation -->
+  <div class="board-nav">
+    <a href="#top">[Return]</a>
+    <a href="#catalog">[Catalog]</a>
+    <a href="#bottom">[Bottom]</a>
+    <a href="#refresh" onclick="location.reload()">[Refresh]</a>
+  </div>
+
+  <!-- Post Form -->
+  <div class="post-form">
+    <table>
+      <tbody>
+        <tr>
+          <td><strong>Name</strong></td>
+          <td>
+            <input type="text" id="name-input" placeholder="Anonymous" maxlength="35" />
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Subject</strong></td>
+          <td>
+            <input type="text" id="subject-input" maxlength="100" />
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Comment</strong></td>
+          <td>
+            <textarea id="comment-input" rows="5" cols="50" maxlength="2000"></textarea>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>File</strong></td>
+          <td>
+            <input type="file" id="file-input" accept="video/*" class="file-input" />
+            <div style="font-size: 11px; color: #666; margin-top: 2px;">
+              Max file size: 4MB. Allowed: webm, mp4, mov
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>
+            <input type="submit" value="Post" class="button" id="post-submit" />
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Thread Container -->
+  <div id="thread-container">
+    <!-- Posts will be inserted here -->
+  </div>
+
+  <!-- Video Modal -->
+  <div class="video-modal" id="video-modal">
+    <video id="modal-video" controls autoplay>
+      <track kind="captions" label="No captions available">
+    </video>
+  </div>
+</Layout>
+
+<script>
+  import { videos, addVideo } from '../lib/stores.ts';
+  import { generateHash, generateAnonymousHash } from '../lib/utils.ts';
+
+  let postCounter = 1000000; // Start with high number like 4chan
+
+  class ImageBoard {
+    private threadContainer: HTMLElement;
+    private postSubmit: HTMLButtonElement;
+    private nameInput: HTMLInputElement;
+    private subjectInput: HTMLInputElement;
+    private commentInput: HTMLTextAreaElement;
+    private fileInput: HTMLInputElement;
+    private videoModal: HTMLElement;
+    private modalVideo: HTMLVideoElement;
+
+    constructor() {
+      this.threadContainer = document.getElementById('thread-container') as HTMLElement;
+      this.postSubmit = document.getElementById('post-submit') as HTMLButtonElement;
+      this.nameInput = document.getElementById('name-input') as HTMLInputElement;
+      this.subjectInput = document.getElementById('subject-input') as HTMLInputElement;
+      this.commentInput = document.getElementById('comment-input') as HTMLTextAreaElement;
+      this.fileInput = document.getElementById('file-input') as HTMLInputElement;
+      this.videoModal = document.getElementById('video-modal') as HTMLElement;
+      this.modalVideo = document.getElementById('modal-video') as HTMLVideoElement;
+
+      this.setupEventListeners();
+      this.loadPosts();
+    }
+
+    private setupEventListeners() {
+      this.postSubmit.addEventListener('click', this.handlePost.bind(this));
+      this.videoModal.addEventListener('click', this.closeModal.bind(this));
+      this.modalVideo.addEventListener('click', (e) => e.stopPropagation());
+    }
+
+    private async handlePost() {
+      const subject = this.subjectInput.value.trim();
+      const comment = this.commentInput.value.trim();
+      const file = this.fileInput.files?.[0];
+      const name = this.nameInput.value.trim() || 'Anonymous';
+
+      if (!comment && !file) {
+        alert('Post must have either comment or file.');
+        return;
+      }
+
+      if (file && !file.type.startsWith('video/')) {
+        alert('Only video files are allowed.');
+        return;
+      }
+
+      try {
+        this.postSubmit.disabled = true;
+        this.postSubmit.value = 'Posting...';
+
+        let videoUrl = '';
+        if (file) {
+          videoUrl = await this.fileToDataURL(file);
+        }
+
+        const newPost = {
+          id: generateHash(comment + Date.now()),
+          uploaderHash: generateAnonymousHash(),
+          title: subject || 'Untitled',
+          url: videoUrl,
+          tags: this.extractTags(comment),
+          timestamp: Date.now(),
+          comments: [],
+          name: name,
+          subject: subject,
+          comment: comment,
+          filename: file?.name || '',
+          filesize: file?.size || 0,
+          postNumber: ++postCounter
+        };
+
+        addVideo(newPost);
+        this.renderPost(newPost, true);
+        this.clearForm();
+
+      } catch (error) {
+        console.error('Post failed:', error);
+        alert('Failed to create post. Please try again.');
+      } finally {
+        this.postSubmit.disabled = false;
+        this.postSubmit.value = 'Post';
+      }
+    }
+
+    private fileToDataURL(file: File): Promise<string> {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    private extractTags(text: string): string[] {
+      const tags = text.match(/#[a-zA-Z0-9_]+/g);
+      return tags ? tags.map(tag => tag.substring(1)) : [];
+    }
+
+    private clearForm() {
+      this.nameInput.value = '';
+      this.subjectInput.value = '';
+      this.commentInput.value = '';
+      this.fileInput.value = '';
+    }
+
+    private loadPosts() {
+      const allVideos = videos.get();
+      allVideos.forEach((video, index) => {
+        if (!video.postNumber) {
+          video.postNumber = postCounter - allVideos.length + index + 1;
+        }
+        this.renderPost(video, false);
+      });
+      
+      if (allVideos.length > 0) {
+        postCounter = Math.max(...allVideos.map(v => v.postNumber || 0));
+      }
+    }
+
+    private renderPost(post: any, isNew: boolean = false) {
+      const postDiv = document.createElement('div');
+      postDiv.className = 'post op';
+      postDiv.innerHTML = `
+        <div class="post-header">
+          <span class="post-name">${post.name || 'Anonymous'}</span>
+          ${post.uploaderHash ? `<span class="post-trip">${post.uploaderHash}</span>` : ''}
+          <span class="post-time">${this.formatDate(new Date(post.timestamp))}</span>
+          <a href="#${post.postNumber}" class="post-number">No.${post.postNumber}</a>
+        </div>
+        ${post.subject ? `<div class="post-subject">${post.subject}</div>` : ''}
+        ${post.url ? `
+          <div class="post-file">
+            <div class="file-info">
+              File: <a href="${post.url}" target="_blank">${post.filename || 'video'}</a>
+              (${this.formatFileSize(post.filesize || 0)})
+            </div>
+            <video class="file-thumb video-thumb" 
+                   src="${post.url}" 
+                   preload="metadata"
+                   onclick="window.imageBoard.openVideo('${post.url}')"
+                   muted>
+            </video>
+          </div>
+        ` : ''}
+        <div class="post-message">${this.formatComment(post.comment || post.title)}</div>
+      `;
+
+      if (isNew) {
+        this.threadContainer.insertBefore(postDiv, this.threadContainer.firstChild);
+      } else {
+        this.threadContainer.appendChild(postDiv);
+      }
+    }
+
+    private formatDate(date: Date): string {
+      const mm = String(date.getMonth() + 1).padStart(2, '0');
+      const dd = String(date.getDate()).padStart(2, '0');
+      const yy = String(date.getFullYear()).substring(2);
+      const hh = String(date.getHours()).padStart(2, '0');
+      const min = String(date.getMinutes()).padStart(2, '0');
+      const ss = String(date.getSeconds()).padStart(2, '0');
+      return `${mm}/${dd}/${yy}(${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][date.getDay()]})${hh}:${min}:${ss}`;
+    }
+
+    private formatFileSize(bytes: number): string {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    private formatComment(text: string): string {
+      // Simple formatting - convert >quotes to green text
+      return text
+        .replace(/^&gt;(.+)$/gm, '<span class="quote">&gt;$1</span>')
+        .replace(/\n/g, '<br>');
+    }
+
+    public openVideo(url: string) {
+      this.modalVideo.src = url;
+      this.videoModal.style.display = 'flex';
+    }
+
+    private closeModal() {
+      this.videoModal.style.display = 'none';
+      this.modalVideo.src = '';
+    }
+  }
+
+  // Initialize the board
+  document.addEventListener('DOMContentLoaded', () => {
+    (window as any).imageBoard = new ImageBoard();
+  });
+</script>

@@ -1,0 +1,842 @@
+---
+// SearchFilters component for filtering and sorting videos
+---
+
+<div class="search-filters">
+  <div class="filters-header">
+    <div class="results-info">
+      <span class="result-count" id="result-count">0 videos</span>
+      <button class="clear-filters" id="clear-filters" style="display: none;">
+        Clear all filters
+      </button>
+    </div>
+    
+    <div class="filter-controls">
+      <select id="sort-select" class="sort-select">
+        <option value="newest">Newest first</option>
+        <option value="oldest">Oldest first</option>
+        <option value="most-comments">Most comments</option>
+        <option value="title">Title A-Z</option>
+      </select>
+      
+      <button 
+        class="toggle-filters"
+        id="toggle-filters"
+      >
+        Filters ▼
+      </button>
+    </div>
+  </div>
+  
+  <div class="filters-content" id="filters-content" style="display: none;">
+    <div class="tags-section" id="tags-section">
+      <h4>Filter by Tags</h4>
+      
+      <div class="tag-search" id="tag-search-container" style="display: none;">
+        <input 
+          type="text"
+          placeholder="Search tags..."
+          id="tag-search"
+        />
+      </div>
+      
+      <div class="tags-grid" id="tags-grid"></div>
+    </div>
+    
+    <div class="active-filters" id="active-filters" style="display: none;">
+      <h4>Active Filters</h4>
+      <div class="active-tags" id="active-tags"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  import { videos, selectedTags, searchQuery, clearFilters, toggleTag } from '../lib/stores.ts';
+
+  class SearchFilters {
+    private filtersElement: HTMLElement;
+    private resultCount: HTMLElement;
+    private clearFiltersBtn: HTMLElement;
+    private sortSelect: HTMLSelectElement;
+    private toggleFiltersBtn: HTMLButtonElement;
+    private filtersContent: HTMLElement;
+    private tagsGrid: HTMLElement;
+    private tagSearchContainer: HTMLElement;
+    private tagSearchInput: HTMLInputElement;
+    private activeFilters: HTMLElement;
+    private activeTags: HTMLElement;
+
+    private showFilters = false;
+    private allTags: string[] = [];
+    private filteredTags: string[] = [];
+    private tagSearchQuery = '';
+
+    constructor(element: HTMLElement) {
+      this.filtersElement = element;
+      this.initializeElements();
+      this.setupEventListeners();
+      this.subscribeToStores();
+    }
+
+    private initializeElements() {
+      this.resultCount = this.filtersElement.querySelector('#result-count') as HTMLElement;
+      this.clearFiltersBtn = this.filtersElement.querySelector('#clear-filters') as HTMLElement;
+      this.sortSelect = this.filtersElement.querySelector('#sort-select') as HTMLSelectElement;
+      this.toggleFiltersBtn = this.filtersElement.querySelector('#toggle-filters') as HTMLButtonElement;
+      this.filtersContent = this.filtersElement.querySelector('#filters-content') as HTMLElement;
+      this.tagsGrid = this.filtersElement.querySelector('#tags-grid') as HTMLElement;
+      this.tagSearchContainer = this.filtersElement.querySelector('#tag-search-container') as HTMLElement;
+      this.tagSearchInput = this.filtersElement.querySelector('#tag-search') as HTMLInputElement;
+      this.activeFilters = this.filtersElement.querySelector('#active-filters') as HTMLElement;
+      this.activeTags = this.filtersElement.querySelector('#active-tags') as HTMLElement;
+    }
+
+    private setupEventListeners() {
+      this.clearFiltersBtn.addEventListener('click', () => {
+        clearFilters();
+        this.sortSelect.value = 'newest';
+        this.tagSearchQuery = '';
+        this.tagSearchInput.value = '';
+        this.updateFilteredTags();
+        this.dispatchSortChange('newest');
+      });
+
+      this.sortSelect.addEventListener('change', () => {
+        this.dispatchSortChange(this.sortSelect.value);
+      });
+
+      this.toggleFiltersBtn.addEventListener('click', () => {
+        this.showFilters = !this.showFilters;
+        this.updateFiltersVisibility();
+      });
+
+      this.tagSearchInput.addEventListener('input', () => {
+        this.tagSearchQuery = this.tagSearchInput.value;
+        this.updateFilteredTags();
+        this.renderTagsGrid();
+      });
+    }
+
+    private subscribeToStores() {
+      videos.subscribe((videoList) => {
+        this.updateAllTags(videoList);
+        this.updateResultCount();
+      });
+
+      selectedTags.subscribe(() => {
+        this.updateResultCount();
+        this.renderActiveTags();
+        this.renderTagsGrid();
+      });
+
+      searchQuery.subscribe(() => {
+        this.updateResultCount();
+      });
+    }
+
+    private updateAllTags(videoList: any[]) {
+      const tagSet = new Set<string>();
+      videoList.forEach(video => {
+        video.tags.forEach((tag: string) => tagSet.add(tag));
+      });
+      this.allTags = Array.from(tagSet).sort();
+      this.updateFilteredTags();
+      this.renderTagsGrid();
+
+      // Show/hide tag search based on number of tags
+      if (this.allTags.length > 10) {
+        this.tagSearchContainer.style.display = 'block';
+      } else {
+        this.tagSearchContainer.style.display = 'none';
+      }
+    }
+
+    private updateFilteredTags() {
+      this.filteredTags = this.allTags.filter(tag => 
+        tag.toLowerCase().includes(this.tagSearchQuery.toLowerCase())
+      );
+    }
+
+    private updateResultCount() {
+      const videoList = videos.get();
+      const query = searchQuery.get();
+      const tags = selectedTags.get();
+
+      const filtered = videoList.filter(video => {
+        const matchesSearch = !query || 
+          video.title.toLowerCase().includes(query.toLowerCase()) ||
+          video.tags.some((tag: string) => tag.toLowerCase().includes(query.toLowerCase()));
+        
+        const matchesTags = tags.length === 0 || 
+          tags.every(tag => video.tags.includes(tag));
+        
+        return matchesSearch && matchesTags;
+      });
+
+      this.resultCount.textContent = `${filtered.length} videos`;
+
+      // Show/hide clear filters button
+      const hasFilters = tags.length > 0 || query;
+      this.clearFiltersBtn.style.display = hasFilters ? 'block' : 'none';
+
+      // Dispatch filter change event for main component
+      window.dispatchEvent(new CustomEvent('filters-changed', {
+        detail: { count: filtered.length, videos: filtered }
+      }));
+    }
+
+    private renderTagsGrid() {
+      const currentSelectedTags = selectedTags.get();
+      const tagsToShow = this.filteredTags.slice(0, 20);
+
+      this.tagsGrid.innerHTML = tagsToShow
+        .map(tag => {
+          const isActive = currentSelectedTags.includes(tag);
+          return `
+            <button 
+              class="tag-filter ${isActive ? 'active' : ''}"
+              data-tag="${tag}"
+            >
+              ${tag}
+            </button>
+          `;
+        })
+        .join('');
+
+      if (this.filteredTags.length > 20) {
+        this.tagsGrid.innerHTML += `
+          <span class="more-tags">+${this.filteredTags.length - 20} more...</span>
+        `;
+      }
+
+      // Add event listeners to tag buttons
+      this.tagsGrid.querySelectorAll('.tag-filter').forEach(button => {
+        button.addEventListener('click', () => {
+          const tag = (button as HTMLElement).dataset.tag;
+          if (tag) {
+            toggleTag(tag);
+          }
+        });
+      });
+    }
+
+    private renderActiveTags() {
+      const currentSelectedTags = selectedTags.get();
+
+      if (currentSelectedTags.length > 0) {
+        this.activeFilters.style.display = 'block';
+        this.activeTags.innerHTML = currentSelectedTags
+          .map(tag => `
+            <div class="active-tag">
+              ${tag}
+              <button data-tag="${tag}" aria-label="Remove ${tag} filter">×</button>
+            </div>
+          `)
+          .join('');
+
+        // Add event listeners to remove buttons
+        this.activeTags.querySelectorAll('button').forEach(button => {
+          button.addEventListener('click', () => {
+            const tag = (button as HTMLElement).dataset.tag;
+            if (tag) {
+              toggleTag(tag);
+            }
+          });
+        });
+      } else {
+        this.activeFilters.style.display = 'none';
+      }
+    }
+
+    private updateFiltersVisibility() {
+      if (this.showFilters) {
+        this.filtersContent.style.display = 'block';
+        this.toggleFiltersBtn.textContent = 'Filters ▲';
+        this.toggleFiltersBtn.classList.add('active');
+        
+        // Animate in
+        this.filtersContent.style.opacity = '0';
+        this.filtersContent.style.transform = 'translateY(-10px)';
+        
+        requestAnimationFrame(() => {
+          this.filtersContent.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+          this.filtersContent.style.opacity = '1';
+          this.filtersContent.style.transform = 'translateY(0)';
+        });
+      } else {
+        this.filtersContent.style.display = 'none';
+        this.toggleFiltersBtn.textContent = 'Filters ▼';
+        this.toggleFiltersBtn.classList.remove('active');
+      }
+    }
+
+    private dispatchSortChange(sortBy: string) {
+      window.dispatchEvent(new CustomEvent('sort-changed', {
+        detail: { sortBy }
+      }));
+    }
+  }
+
+  // Initialize search filters
+  document.addEventListener('DOMContentLoaded', () => {
+    const searchFilters = document.querySelector('.search-filters');
+    if (searchFilters) {
+      new SearchFilters(searchFilters as HTMLElement);
+    }
+  });
+</script>
+
+<style>
+  .search-filters {
+    background: rgba(45, 45, 45, 0.95);
+    border-radius: 16px;
+    padding: clamp(1.25rem, 3vw, 1.5rem);
+    margin-bottom: clamp(1.25rem, 3vw, 1.5rem);
+    border: 1px solid rgba(64, 64, 64, 0.8);
+    backdrop-filter: blur(24px) saturate(180%);
+    box-shadow: 
+      0 1px 0 rgba(255, 255, 255, 0.05) inset,
+      0 8px 32px rgba(0, 0, 0, 0.12),
+      0 4px 16px rgba(0, 0, 0, 0.08);
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: transform, box-shadow;
+    contain: layout style paint;
+  }
+
+  .search-filters::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(74, 222, 128, 0.3) 20%,
+      rgba(74, 222, 128, 0.6) 50%,
+      rgba(74, 222, 128, 0.3) 80%,
+      transparent 100%
+    );
+    animation: shimmer 3s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+  }
+
+  .search-filters:hover {
+    transform: translateY(-1px);
+    box-shadow: 
+      0 1px 0 rgba(255, 255, 255, 0.08) inset,
+      0 12px 40px rgba(0, 0, 0, 0.15),
+      0 6px 20px rgba(0, 0, 0, 0.1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .search-filters::before {
+      animation: none;
+    }
+    
+    .search-filters {
+      transition: none;
+    }
+  }
+
+  .filters-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: clamp(0.75rem, 2vw, 1rem);
+    position: relative;
+  }
+
+  .results-info {
+    display: flex;
+    align-items: center;
+    gap: clamp(0.75rem, 2vw, 1rem);
+    flex-wrap: wrap;
+  }
+
+  .result-count {
+    color: #4ade80;
+    font-weight: 600;
+    font-size: clamp(0.9rem, 2.5vw, 1rem);
+    position: relative;
+    padding-left: 1.25rem;
+    transition: all 0.3s ease;
+  }
+
+  .result-count::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 1rem;
+    background: linear-gradient(180deg, #4ade80, #22c55e);
+    border-radius: 2px;
+    box-shadow: 0 0 8px rgba(74, 222, 128, 0.3);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.6; transform: translateY(-50%) scaleY(1); }
+    50% { opacity: 1; transform: translateY(-50%) scaleY(1.1); }
+  }
+
+  .result-count::after {
+    content: '';
+    position: absolute;
+    left: -2px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 7px;
+    height: 1.25rem;
+    background: rgba(74, 222, 128, 0.1);
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .result-count:hover::after {
+    opacity: 1;
+  }
+
+  .clear-filters {
+    background: rgba(220, 38, 38, 0.1);
+    border: 1px solid rgba(220, 38, 38, 0.3);
+    color: #dc2626;
+    padding: clamp(0.4rem, 1.5vw, 0.5rem) clamp(0.75rem, 2vw, 1rem);
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: clamp(0.8rem, 2vw, 0.85rem);
+    font-weight: 500;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    backdrop-filter: blur(10px);
+    position: relative;
+    overflow: hidden;
+    will-change: transform, background-color;
+  }
+
+  .clear-filters::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.2),
+      transparent
+    );
+    transition: left 0.4s ease;
+  }
+
+  .clear-filters:hover {
+    background: #dc2626;
+    color: #fff;
+    transform: translateY(-1px) scale(1.02);
+    box-shadow: 0 4px 16px rgba(220, 38, 38, 0.3);
+    border-color: #dc2626;
+  }
+
+  .clear-filters:hover::before {
+    left: 100%;
+  }
+
+  .clear-filters:active {
+    transform: translateY(0) scale(1);
+    transition-duration: 0.1s;
+  }
+
+  .clear-filters:focus-visible {
+    outline: 2px solid #dc2626;
+    outline-offset: 2px;
+  }
+
+  .filter-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .sort-select {
+    background: rgba(64, 64, 64, 0.8);
+    border: 1px solid rgba(85, 85, 85, 0.8);
+    color: #fff;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    backdrop-filter: blur(10px);
+    transition: all 0.2s ease;
+    outline: none;
+  }
+
+  .sort-select:focus,
+  .sort-select:hover {
+    border-color: #4ade80;
+    background: rgba(74, 222, 128, 0.1);
+    box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.2);
+  }
+
+  .toggle-filters {
+    background: rgba(64, 64, 64, 0.8);
+    border: 1px solid rgba(85, 85, 85, 0.8);
+    color: #fff;
+    padding: clamp(0.6rem, 2vw, 0.75rem) clamp(1rem, 3vw, 1.25rem);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: clamp(0.85rem, 2vw, 0.9rem);
+    font-weight: 500;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    backdrop-filter: blur(10px);
+    position: relative;
+    overflow: hidden;
+    will-change: transform, background;
+    white-space: nowrap;
+  }
+
+  .toggle-filters::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: -1;
+  }
+
+  .toggle-filters::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 0;
+    height: 0;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, transparent 70%);
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    opacity: 0;
+  }
+
+  .toggle-filters:hover,
+  .toggle-filters.active {
+    color: #000;
+    border-color: #4ade80;
+    transform: translateY(-1px) scale(1.02);
+    box-shadow: 0 4px 16px rgba(74, 222, 128, 0.3);
+  }
+
+  .toggle-filters:hover::before,
+  .toggle-filters.active::before {
+    opacity: 1;
+  }
+
+  .toggle-filters:hover::after {
+    width: 100%;
+    height: 100%;
+    opacity: 1;
+  }
+
+  .toggle-filters:active {
+    transform: translateY(0) scale(1);
+    transition-duration: 0.1s;
+  }
+
+  .toggle-filters:focus-visible {
+    outline: 2px solid #4ade80;
+    outline-offset: 2px;
+  }
+
+  .filters-content {
+    margin-top: clamp(0.75rem, 2vw, 1rem);
+    padding-top: clamp(0.75rem, 2vw, 1rem);
+    border-top: 1px solid rgba(64, 64, 64, 0.8);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .filters-content::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(74, 222, 128, 0.3),
+      transparent
+    );
+    transform: scaleX(0);
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .filters-content[style*="block"]::before {
+    transform: scaleX(1);
+  }
+
+  .tags-section h4,
+  .active-filters h4 {
+    color: #4ade80;
+    margin: 0 0 1rem 0;
+    font-size: 1rem;
+  }
+
+  .tag-search {
+    margin-bottom: 1rem;
+  }
+
+  .tag-search input {
+    background: rgba(64, 64, 64, 0.8);
+    border: 1px solid rgba(85, 85, 85, 0.8);
+    color: #fff;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    width: 100%;
+    max-width: 250px;
+    font-size: 0.9rem;
+    backdrop-filter: blur(10px);
+    transition: all 0.2s ease;
+    outline: none;
+  }
+
+  .tag-search input:focus {
+    border-color: #4ade80;
+    background: rgba(74, 222, 128, 0.1);
+    box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.2);
+  }
+
+  .tag-search input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .tags-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .tag-filter {
+    background: rgba(64, 64, 64, 0.6);
+    border: 1px solid rgba(85, 85, 85, 0.6);
+    color: #fff;
+    padding: clamp(0.4rem, 1.5vw, 0.5rem) clamp(0.75rem, 2vw, 1rem);
+    border-radius: 24px;
+    cursor: pointer;
+    font-size: clamp(0.8rem, 2vw, 0.85rem);
+    font-weight: 500;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    backdrop-filter: blur(10px);
+    position: relative;
+    overflow: hidden;
+    will-change: transform, background;
+    white-space: nowrap;
+  }
+
+  .tag-filter::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: -1;
+  }
+
+  .tag-filter::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, transparent 70%);
+    border-radius: 24px;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity: 0;
+  }
+
+  .tag-filter:hover {
+    background: rgba(85, 85, 85, 0.8);
+    transform: translateY(-1px) scale(1.02);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    border-color: rgba(128, 128, 128, 0.8);
+  }
+
+  .tag-filter:hover::after {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  .tag-filter.active {
+    color: #000;
+    border-color: #4ade80;
+    transform: translateY(-1px) scale(1.02);
+    box-shadow: 0 4px 16px rgba(74, 222, 128, 0.3);
+  }
+
+  .tag-filter.active::before {
+    opacity: 1;
+  }
+
+  .tag-filter.active::after {
+    background: radial-gradient(circle, rgba(0, 0, 0, 0.1) 0%, transparent 70%);
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  .tag-filter:active {
+    transform: translateY(0) scale(1);
+    transition-duration: 0.1s;
+  }
+
+  .tag-filter:focus-visible {
+    outline: 2px solid #4ade80;
+    outline-offset: 2px;
+  }
+
+  .more-tags {
+    color: #999;
+    font-size: 0.8rem;
+    padding: 0.3rem 0.8rem;
+    align-self: center;
+  }
+
+  .active-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .active-tag {
+    background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+    color: #000;
+    padding: 0.5rem 1rem;
+    border-radius: 24px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    box-shadow: 0 2px 8px rgba(74, 222, 128, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+  }
+
+  .active-tag button {
+    background: rgba(0, 0, 0, 0.1);
+    border: none;
+    color: #000;
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    font-weight: bold;
+  }
+
+  .active-tag button:hover {
+    background: rgba(0, 0, 0, 0.2);
+    transform: scale(1.1);
+  }
+
+  @media (max-width: 768px) {
+    .search-filters {
+      padding: clamp(1rem, 4vw, 1.25rem);
+      margin-bottom: clamp(1rem, 4vw, 1.25rem);
+    }
+
+    .filters-header {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 1rem;
+    }
+
+    .results-info {
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .filter-controls {
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    .sort-select,
+    .toggle-filters {
+      flex: 1;
+      min-width: 0;
+      text-align: center;
+    }
+
+    .tags-grid {
+      gap: clamp(0.25rem, 1vw, 0.5rem);
+    }
+
+    .tag-filter {
+      font-size: clamp(0.75rem, 2vw, 0.8rem);
+      padding: clamp(0.3rem, 1vw, 0.4rem) clamp(0.6rem, 2vw, 0.8rem);
+    }
+
+    .active-tag {
+      font-size: clamp(0.75rem, 2vw, 0.8rem);
+      padding: clamp(0.3rem, 1vw, 0.4rem) clamp(0.6rem, 2vw, 0.8rem);
+    }
+  }
+
+  @media (max-width: 480px) {
+    .result-count {
+      font-size: 0.85rem;
+    }
+
+    .clear-filters {
+      font-size: 0.75rem;
+      padding: 0.35rem 0.6rem;
+    }
+
+    .toggle-filters {
+      font-size: 0.8rem;
+    }
+
+    .sort-select {
+      font-size: 0.8rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tag-filter::before,
+    .tag-filter::after,
+    .toggle-filters::before,
+    .toggle-filters::after,
+    .clear-filters::before,
+    .result-count::before {
+      animation: none;
+      transition: none;
+    }
+  }
+</style>
