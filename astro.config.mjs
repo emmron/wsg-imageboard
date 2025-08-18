@@ -4,9 +4,10 @@ import vercel from '@astrojs/vercel';
 
 // https://astro.build/config
 export default defineConfig({
-  output: 'static',
+  output: 'hybrid', // Enable hybrid mode for API routes
   adapter: vercel({
-    webAnalytics: { enabled: true }
+    webAnalytics: { enabled: true },
+    maxDuration: 60 // Increase timeout for video processing
   }),
   build: {
     inlineStylesheets: 'always'

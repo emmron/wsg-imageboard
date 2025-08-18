@@ -16,7 +16,7 @@
       <div class="drop-content">
         <div class="drop-icon">📁</div>
         <p>Drop video file here or click to select</p>
-        <small>Supports MP4, WebM • Max 100MB</small>
+        <small>Supports all major video formats (MP4, AVI, MOV, WMV, FLV, WebM, MKV, etc.) • Max 2GB</small>
       </div>
       <input 
         type="file" 
@@ -221,35 +221,51 @@
       this.uploadProgress.style.display = 'block';
 
       try {
-        // Simulate upload progress
-        for (let i = 0; i <= 100; i += 10) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-          this.progressFill.style.width = `${i}%`;
-          this.progressText.textContent = `Uploading... ${i}%`;
-        }
-
-        // Convert file to data URL for persistence
-        const videoUrl = await this.fileToDataURL(this.selectedFile);
-
         // Parse tags
         const tags = this.tagsInput.value
           .split(',')
           .map(tag => tag.trim())
           .filter(tag => tag.length > 0);
 
-        // Create video object
-        const newVideo = {
-          id: generateHash(this.titleInput.value + Date.now()),
-          uploaderHash: generateAnonymousHash(),
-          title: this.titleInput.value.trim(),
-          url: videoUrl,
-          tags: tags,
-          timestamp: Date.now(),
-          comments: []
-        };
+        // Prepare form data for API upload
+        const formData = new FormData();
+        formData.append('video', this.selectedFile);
+        formData.append('title', this.titleInput.value.trim());
+        formData.append('tags', tags.join(','));
 
-        // Add to store
-        addVideo(newVideo);
+        // Update progress
+        this.progressFill.style.width = '30%';
+        this.progressText.textContent = 'Uploading to server...';
+
+        // Upload to API
+        const uploadResponse = await fetch('/api/video/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!uploadResponse.ok) {
+          throw new Error('Upload failed');
+        }
+
+        const uploadResult = await uploadResponse.json();
+        
+        if (!uploadResult.success) {
+          throw new Error(uploadResult.message || 'Upload failed');
+        }
+
+        this.progressFill.style.width = '60%';
+        this.progressText.textContent = 'Processing video...';
+
+        // Check if video needs conversion
+        if (uploadResult.needsConversion) {
+          await this.handleVideoConversion(uploadResult.videoId);
+        } else {
+          // Video is web-compatible, create video object directly
+          await this.createVideoObject(uploadResult.videoId);
+        }
+
+        this.progressFill.style.width = '100%';
+        this.progressText.textContent = 'Upload complete!';
 
         // Show success and reset form
         this.showSuccess();
@@ -260,12 +276,99 @@
 
       } catch (error) {
         console.error('Upload failed:', error);
-        alert('Upload failed. Please try again.');
+        alert(`Upload failed: ${error.message}`);
         this.uploading = false;
         this.uploadBtn.disabled = false;
         this.uploadBtn.textContent = 'Upload Video';
         this.uploadProgress.style.display = 'none';
       }
+    }
+
+    private async handleVideoConversion(videoId: string) {
+      // Start conversion process
+      const processResponse = await fetch('/api/video/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videoId,
+          originalFormat: this.selectedFile.type,
+          targetFormat: 'video/mp4'
+        })
+      });
+
+      if (!processResponse.ok) {
+        throw new Error('Video processing failed');
+      }
+
+      // Poll for conversion status
+      await this.pollConversionStatus(videoId);
+    }
+
+    private async pollConversionStatus(videoId: string): Promise<void> {
+      return new Promise(async (resolve, reject) => {
+        const maxAttempts = 30; // 30 seconds max
+        let attempts = 0;
+
+        const poll = async () => {
+          try {
+            const statusResponse = await fetch(`/api/video/process?videoId=${videoId}`);
+            
+            if (!statusResponse.ok) {
+              throw new Error('Failed to check conversion status');
+            }
+
+            const status = await statusResponse.json();
+            
+            if (status.status === 'completed') {
+              await this.createVideoObject(videoId, status.thumbnailUrl);
+              resolve();
+            } else if (status.status === 'failed') {
+              throw new Error('Video conversion failed');
+            } else {
+              // Update progress
+              const progress = Math.max(60, Math.min(95, 60 + (status.progress || 0) * 0.35));
+              this.progressFill.style.width = `${progress}%`;
+              this.progressText.textContent = `Converting video... ${Math.round(progress)}%`;
+              
+              attempts++;
+              if (attempts < maxAttempts) {
+                setTimeout(poll, 1000); // Poll every second
+              } else {
+                throw new Error('Conversion timeout');
+              }
+            }
+          } catch (error) {
+            reject(error);
+          }
+        };
+
+        poll();
+      });
+    }
+
+    private async createVideoObject(videoId: string, thumbnailUrl?: string) {
+      // For client-side storage, we still need the data URL
+      const videoUrl = await this.fileToDataURL(this.selectedFile);
+      
+      const tags = this.tagsInput.value
+        .split(',')
+        .map(tag => tag.trim())
+        .filter(tag => tag.length > 0);
+
+      // Create video object
+      const newVideo = {
+        id: videoId,
+        uploaderHash: generateAnonymousHash(),
+        title: this.titleInput.value.trim(),
+        url: videoUrl,
+        thumbnailUrl: thumbnailUrl,
+        tags: tags,
+        timestamp: Date.now(),
+        comments: []
+      };
+
+      // Add to store
+      addVideo(newVideo);
     }
 
     private showSuccess() {

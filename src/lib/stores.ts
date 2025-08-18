@@ -13,6 +13,7 @@ export interface Video {
   uploaderHash: string; // Anonymous hash like "Anonymous #e5f6g7h8"
   title: string;
   url: string;
+  thumbnailUrl?: string; // Optional thumbnail URL for video preview
   tags: string[];
   timestamp: number;
   comments: Comment[];

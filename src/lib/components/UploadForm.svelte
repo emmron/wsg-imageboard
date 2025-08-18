@@ -1,7 +1,7 @@
 <script>
 	import { videos } from '$lib/stores.js';
 	import { generateHash } from '$lib/utils.js';
-	import { validateFile, validateTitle, validateTags, sanitizeText } from '$lib/validation.js';
+	import { validateFile, validateTitle, validateTags, sanitizeText, getVideoMetadata } from '$lib/validation.js';
 	import { fly, scale, fade } from 'svelte/transition';
 	import { quintOut, cubicOut } from 'svelte/easing';
 	
@@ -36,14 +36,38 @@
 		}
 	}
 	
-	function createFilePreview(file) {
+	async function createFilePreview(file) {
 		if (file && file.type.startsWith('video/')) {
-			filePreview = {
-				name: file.name,
-				size: formatFileSize(file.size),
-				type: file.type,
-				url: URL.createObjectURL(file)
-			};
+			// Get video metadata for better preview
+			try {
+				const metadata = await getVideoMetadata(file);
+				
+				filePreview = {
+					name: file.name,
+					size: formatFileSize(file.size),
+					type: file.type,
+					url: URL.createObjectURL(file),
+					duration: metadata.duration,
+					dimensions: metadata.width && metadata.height ? `${metadata.width}x${metadata.height}` : null,
+					canPlayInBrowser: metadata.canPlayInBrowser
+				};
+				
+				// Add warning if video can't play in browser
+				if (!metadata.canPlayInBrowser) {
+					validationWarnings = [...validationWarnings, 'Video format may not play in all browsers. Will be converted for web compatibility.'];
+				}
+			} catch (error) {
+				console.warn('Could not extract video metadata:', error);
+				
+				// Fallback to basic preview
+				filePreview = {
+					name: file.name,
+					size: formatFileSize(file.size),
+					type: file.type,
+					url: URL.createObjectURL(file),
+					canPlayInBrowser: false
+				};
+			}
 		}
 	}
 	
@@ -183,10 +207,30 @@
 			<div class="file-selected" in:scale={{ duration: 200, easing: cubicOut }}>
 				{#if filePreview}
 					<div class="file-preview">
-						<video src={filePreview.url} muted class="preview-video"></video>
+						{#if filePreview.canPlayInBrowser}
+							<video src={filePreview.url} muted class="preview-video"></video>
+						{:else}
+							<div class="preview-placeholder">
+								<div class="file-icon">🎥</div>
+								<small>Preview not available</small>
+							</div>
+						{/if}
 						<div class="file-info">
 							<div class="file-name">✓ {filePreview.name}</div>
-							<div class="file-details">{filePreview.size} • {filePreview.type}</div>
+							<div class="file-details">
+								{filePreview.size} • {filePreview.type}
+								{#if filePreview.duration}
+									• {Math.round(filePreview.duration)}s
+								{/if}
+								{#if filePreview.dimensions}
+									• {filePreview.dimensions}
+								{/if}
+							</div>
+							{#if !filePreview.canPlayInBrowser}
+								<div class="format-warning">
+									⚠ Will be converted for web compatibility
+								</div>
+							{/if}
 						</div>
 					</div>
 				{:else}
@@ -207,7 +251,7 @@
 					<div class="drop-idle">
 						<div class="drop-icon">📁</div>
 						<p>Drop video file here or click to select</p>
-						<small>Supports MP4, WebM, AVI • Max 500MB</small>
+						<small>Supports all major video formats (MP4, AVI, MOV, WMV, FLV, WebM, MKV, etc.) • Max 2GB</small>
 					</div>
 				{/if}
 				<input 
@@ -476,6 +520,37 @@
 		object-fit: cover;
 		border-radius: 6px;
 		border: 1px solid rgba(255, 255, 255, 0.1);
+	}
+	
+	.preview-placeholder {
+		width: 60px;
+		height: 45px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		background: rgba(255, 255, 255, 0.1);
+		border-radius: 6px;
+		border: 1px solid rgba(255, 255, 255, 0.2);
+	}
+	
+	.file-icon {
+		font-size: 1.5rem;
+		opacity: 0.7;
+	}
+	
+	.preview-placeholder small {
+		font-size: 0.6rem;
+		color: #999;
+		text-align: center;
+		margin-top: 2px;
+	}
+	
+	.format-warning {
+		color: #fbbf24;
+		font-size: 0.75rem;
+		margin-top: 2px;
+		font-weight: 500;
 	}
 	
 	.file-info {
