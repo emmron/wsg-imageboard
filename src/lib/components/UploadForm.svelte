@@ -2,6 +2,7 @@
 	import { videos } from '$lib/stores.js';
 	import { generateHash } from '$lib/utils.js';
 	import { validateFile, validateTitle, validateTags, sanitizeText, getVideoMetadata } from '$lib/validation.js';
+	import { ChunkedUploader, shouldUseChunkedUpload } from '$lib/chunked-upload.ts';
 	import { fly, scale, fade } from 'svelte/transition';
 	import { quintOut, cubicOut } from 'svelte/easing';
 	
@@ -20,10 +21,13 @@
 	let dragCounter = 0;
 	let filePreview = null;
 	let successMessage = false;
+	let uploadError = null;
+	let currentUploader = null;
 	
 	function handleFileSelect(event) {
 		const file = event.target.files[0];
 		if (file) {
+			uploadError = null; // Clear previous errors
 			const validation = validateFile(file);
 			if (validation.valid) {
 				videoFile = file;
@@ -91,6 +95,7 @@
 		dragCounter = 0;
 		const file = event.dataTransfer.files[0];
 		if (file) {
+			uploadError = null; // Clear previous errors
 			const validation = validateFile(file);
 			if (validation.valid) {
 				videoFile = file;
@@ -156,37 +161,72 @@
 		}
 		
 		uploading = true;
+		uploadError = null;
+		uploadProgress = 0;
 		
 		try {
-			// Create object URL for the video
-			const videoUrl = URL.createObjectURL(videoFile);
+			// Use chunked uploader for actual server upload
+			currentUploader = new ChunkedUploader({
+				file: videoFile,
+				onProgress: (progress) => {
+					uploadProgress = progress;
+				},
+				onChunkComplete: (chunkIndex, totalChunks) => {
+					if (process.env.NODE_ENV === 'development') {
+						console.log(`Chunk ${chunkIndex + 1}/${totalChunks} completed`);
+					}
+				},
+				onError: (error) => {
+					uploadError = error.message;
+					uploading = false;
+				},
+				metadata: {
+					title: sanitizeText(title.trim()),
+					tags: tagsValidation.cleanTags.join(', ')
+				}
+			});
 			
-			// Create video object with sanitized data
-			const newVideo = {
-				id: generateHash(title),
-				hash: generateHash(title),
-				title: sanitizeText(title.trim()),
-				url: videoUrl,
-				tags: tagsValidation.cleanTags,
-				timestamp: Date.now(),
-				comments: []
-			};
+			const result = await currentUploader.upload();
 			
-			// Add to store
-			videos.update(currentVideos => [newVideo, ...currentVideos]);
+			if (result.success && result.fileUrl) {
+				// Create video object with server response
+				const newVideo = {
+					id: result.videoId || generateHash(title),
+					hash: result.videoId || generateHash(title),
+					title: sanitizeText(title.trim()),
+					url: result.fileUrl,
+					tags: tagsValidation.cleanTags,
+					timestamp: Date.now(),
+					comments: [],
+					needsConversion: result.needsConversion || false
+				};
+				
+				// Add to store
+				videos.update(currentVideos => [newVideo, ...currentVideos]);
+				
+				// Show success
+				successMessage = true;
+				setTimeout(() => successMessage = false, 5000);
+				
+				// Reset form
+				title = '';
+				tags = '';
+				videoFile = null;
+				filePreview = null;
+				validationErrors = [];
+				validationWarnings = [];
+				
+				onUploadComplete();
+			} else {
+				uploadError = result.message || 'Upload failed. Please try again.';
+			}
 			
-			// Reset form
-			title = '';
-			tags = '';
-			videoFile = null;
-			uploading = false;
-			validationErrors = [];
-			validationWarnings = [];
-			
-			onUploadComplete();
 		} catch (error) {
 			console.error('Upload failed:', error);
+			uploadError = error.message || 'Upload failed. Please try again.';
+		} finally {
 			uploading = false;
+			currentUploader = null;
 		}
 	}
 </script>
@@ -331,6 +371,21 @@
 				<div class="progress-fill" style="width: {uploadProgress}%"></div>
 			</div>
 			<p>Uploading... {Math.round(uploadProgress)}%</p>
+			{#if shouldUseChunkedUpload(videoFile)}
+				<small>Using optimized chunked upload for large file ({formatFileSize(videoFile.size)})</small>
+			{:else}
+				<small>Uploading {formatFileSize(videoFile.size)} file</small>
+			{/if}
+			{#if uploadProgress > 0 && uploadProgress < 100}
+				<small class="upload-tip">💡 Tip: Keep this tab open to ensure upload completes successfully</small>
+			{/if}
+		</div>
+	{/if}
+	
+	{#if uploadError}
+		<div class="error-message" in:fly={{ y: 10, duration: 200 }}>
+			⚠ {uploadError}
+			<button class="retry-btn" on:click={() => uploadError = null}>Dismiss</button>
 		</div>
 	{/if}
 	
@@ -633,6 +688,13 @@
 		backdrop-filter: blur(10px);
 	}
 	
+	.upload-tip {
+		color: #fbbf24 !important;
+		font-weight: 500;
+		margin-top: 0.5rem;
+		display: block;
+	}
+	
 	.progress-bar {
 		width: 100%;
 		height: 8px;
@@ -682,6 +744,38 @@
 		text-align: center;
 		font-weight: 600;
 		backdrop-filter: blur(10px);
+	}
+	
+	.error-message {
+		background: rgba(220, 38, 38, 0.2);
+		border: 1px solid rgba(220, 38, 38, 0.4);
+		color: #fca5a5;
+		padding: 1rem;
+		border-radius: 8px;
+		text-align: center;
+		font-weight: 600;
+		backdrop-filter: blur(10px);
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+	
+	.retry-btn {
+		background: rgba(220, 38, 38, 0.3);
+		color: #fca5a5;
+		border: 1px solid rgba(220, 38, 38, 0.5);
+		padding: 0.4rem 0.8rem;
+		border-radius: 4px;
+		cursor: pointer;
+		font-size: 0.8rem;
+		transition: all 0.2s ease;
+		flex-shrink: 0;
+	}
+	
+	.retry-btn:hover {
+		background: rgba(220, 38, 38, 0.5);
+		color: #fff;
 	}
 	
 	.upload-btn {

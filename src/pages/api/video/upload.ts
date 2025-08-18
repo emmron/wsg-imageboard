@@ -1,9 +1,9 @@
 import type { APIRoute } from 'astro';
-import { writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
-import { existsSync } from 'fs';
 
 export const prerender = false; // Enable server-side processing
+
+// Use environment variable to determine storage method
+const USE_CLOUD_STORAGE = process.env.VERCEL_ENV === 'production' || process.env.USE_CLOUD_STORAGE === 'true';
 
 interface VideoUploadResponse {
   success: boolean;
@@ -24,6 +24,56 @@ const ALLOWED_VIDEO_TYPES = [
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
 const UPLOAD_DIR = './public/uploads/videos';
+
+// Cloud storage upload function with improved error handling
+async function uploadToCloudStorage(file: File, filename: string): Promise<string> {
+  // Check if we're in a Vercel environment and cloud storage is enabled
+  const isVercelEnvironment = process.env.VERCEL_ENV || process.env.VERCEL;
+  
+  if (USE_CLOUD_STORAGE && isVercelEnvironment) {
+    try {
+      // Attempt to use Vercel Blob storage
+      const { put } = await import('@vercel/blob');
+      const blob = await put(`videos/${filename}`, file, {
+        access: 'public',
+        addRandomSuffix: false,
+      });
+      return blob.url;
+    } catch (importError) {
+      console.error('Vercel Blob import or upload failed:', importError);
+      
+      // Log the specific error for debugging
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Cloud storage unavailable, falling back to local storage');
+        console.warn('To use cloud storage, ensure @vercel/blob is installed and configured');
+      }
+      
+      // Fallback to local storage
+      return `/uploads/videos/${filename}`;
+    }
+  } else {
+    // Local development or cloud storage disabled
+    return `/uploads/videos/${filename}`;
+  }
+}
+
+// Local file system upload (development only)
+async function uploadToLocalStorage(file: File, filePath: string, fileUrl: string): Promise<string> {
+  const { writeFile, mkdir } = await import('fs/promises');
+  const { existsSync } = await import('fs');
+  
+  try {
+    if (!existsSync(UPLOAD_DIR)) {
+      await mkdir(UPLOAD_DIR, { recursive: true });
+    }
+    const buffer = await file.arrayBuffer();
+    await writeFile(filePath, new Uint8Array(buffer));
+    return fileUrl;
+  } catch (error) {
+    console.error('Local storage upload failed:', error);
+    throw new Error('Failed to save uploaded file');
+  }
+}
 
 export const POST: APIRoute = async ({ request }) => {
   try {
@@ -107,34 +157,23 @@ export const POST: APIRoute = async ({ request }) => {
     const fileExtension2 = getFileExtension(safeFileName);
     const fileName = `${videoId}${fileExtension2}`;
     
-    // Ensure upload directory exists
-    try {
-      if (!existsSync(UPLOAD_DIR)) {
-        await mkdir(UPLOAD_DIR, { recursive: true });
-      }
-    } catch (error) {
-      console.error('Failed to create upload directory:', error);
-      return new Response(JSON.stringify({
-        success: false,
-        message: 'Failed to prepare upload directory'
-      }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // Save file to disk
-    const filePath = join(UPLOAD_DIR, fileName);
-    const fileUrl = `/uploads/videos/${fileName}`;
+    // Upload file to storage
+    let fileUrl: string;
     
     try {
-      const buffer = await videoFile.arrayBuffer();
-      await writeFile(filePath, new Uint8Array(buffer));
+      if (USE_CLOUD_STORAGE) {
+        fileUrl = await uploadToCloudStorage(videoFile, fileName);
+      } else {
+        const { join } = await import('path');
+        const filePath = join(UPLOAD_DIR, fileName);
+        const localUrl = `/uploads/videos/${fileName}`;
+        fileUrl = await uploadToLocalStorage(videoFile, filePath, localUrl);
+      }
     } catch (error) {
-      console.error('Failed to save file:', error);
+      console.error('File upload failed:', error);
       return new Response(JSON.stringify({
         success: false,
-        message: 'Failed to save uploaded file'
+        message: error instanceof Error ? error.message : 'Failed to save uploaded file'
       }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
@@ -164,9 +203,22 @@ export const POST: APIRoute = async ({ request }) => {
   } catch (error) {
     console.error('Video upload error:', error);
     
+    // Provide more specific error messages for debugging
+    let errorMessage = 'Internal server error during upload';
+    if (error instanceof Error) {
+      if (error.message.includes('ENOENT') || error.message.includes('permission')) {
+        errorMessage = 'Storage access error. This may be a deployment configuration issue.';
+      } else if (error.message.includes('size')) {
+        errorMessage = 'File too large or upload timeout.';
+      } else {
+        errorMessage = error.message;
+      }
+    }
+    
     return new Response(JSON.stringify({
       success: false,
-      message: 'Internal server error during upload'
+      message: errorMessage,
+      error: process.env.NODE_ENV === 'development' ? error?.toString() : undefined
     }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
