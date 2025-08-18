@@ -81,19 +81,57 @@ export const GET: APIRoute = async ({ url }) => {
   // In a real implementation, this would check the actual processing status
   // from your database or processing service
   
-  // For demo purposes, we'll simulate different stages
-  const mockStatuses = ['queued', 'processing', 'completed'];
-  const randomStatus = mockStatuses[Math.floor(Math.random() * mockStatuses.length)];
-  const progress = randomStatus === 'completed' ? 100 : Math.floor(Math.random() * 90) + 10;
+  // For demo purposes, we'll simulate a more realistic processing progression
+  // In production, you would integrate with services like AWS MediaConvert, FFmpeg, etc.
+  
+  // Store processing state in memory (in production, use database)
+  if (!globalThis.processingState) {
+    globalThis.processingState = new Map();
+  }
+  
+  const currentState = globalThis.processingState.get(videoId) || {
+    status: 'queued',
+    progress: 0,
+    startTime: Date.now()
+  };
+  
+  const elapsedTime = Date.now() - currentState.startTime;
+  
+  let status = currentState.status;
+  let progress = currentState.progress;
+  
+  // Simulate realistic processing progression
+  if (status === 'queued' && elapsedTime > 2000) { // 2 seconds
+    status = 'processing';
+    progress = 10;
+  } else if (status === 'processing') {
+    // Simulate gradual progress over time
+    const progressIncrement = Math.min(5, Math.floor(elapsedTime / 1000) * 2);
+    progress = Math.min(100, currentState.progress + progressIncrement);
+    
+    if (progress >= 100) {
+      status = 'completed';
+      progress = 100;
+    }
+  }
+  
+  // Update state
+  globalThis.processingState.set(videoId, {
+    ...currentState,
+    status,
+    progress
+  });
 
   const response: ProcessResponse = {
     success: true,
     videoId,
-    status: randomStatus as any,
+    status: status as any,
     progress,
     outputFormat: 'video/mp4',
-    thumbnailUrl: randomStatus === 'completed' ? `/api/video/thumbnail?videoId=${videoId}` : undefined,
-    message: `Video processing ${randomStatus} (${progress}%)`
+    thumbnailUrl: status === 'completed' ? `/api/video/thumbnail?videoId=${videoId}` : undefined,
+    message: status === 'completed' 
+      ? 'Video processing completed successfully'
+      : `Video processing ${status} (${progress}%)`
   };
 
   return new Response(JSON.stringify(response), {

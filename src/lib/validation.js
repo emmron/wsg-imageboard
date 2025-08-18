@@ -1,6 +1,6 @@
 // Client-side validation helpers
 export const VALIDATION_RULES = {
-	maxFileSize: 500 * 1024 * 1024, // 500MB
+	maxFileSize: 2 * 1024 * 1024 * 1024, // 2GB
 	maxTitleLength: 100,
 	maxTagLength: 30,
 	maxTags: 10,
@@ -31,7 +31,7 @@ export function validateFile(file) {
 	
 	// File size check
 	if (file.size > VALIDATION_RULES.maxFileSize) {
-		errors.push(`File too large. Max size: ${Math.round(VALIDATION_RULES.maxFileSize / 1024 / 1024)}MB`);
+		errors.push(`File too large. Max size: ${Math.round(VALIDATION_RULES.maxFileSize / 1024 / 1024 / 1024)}GB`);
 	}
 	
 	// File type check

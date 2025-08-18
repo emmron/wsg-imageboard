@@ -320,7 +320,7 @@
 				<li>No content involving minors</li>
 				<li>Respect privacy - no personal/private content without consent</li>
 				<li>Keep titles and tags appropriate</li>
-				<li>Max file size: 500MB</li>
+				<li>Max file size: 2GB</li>
 			</ul>
 		</div>
 	{/if}

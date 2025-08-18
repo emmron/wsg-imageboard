@@ -70,6 +70,7 @@
 <script>
   import { addVideo } from '../lib/stores.ts';
   import { generateHash, generateAnonymousHash } from '../lib/utils.ts';
+  import { ChunkedUploader, shouldUseChunkedUpload } from '../lib/chunked-upload.ts';
 
   class UploadForm {
     private form: HTMLElement;
@@ -91,6 +92,7 @@
     private selectedFile: File | null = null;
     private dragCounter = 0;
     private uploading = false;
+    private currentUploader: ChunkedUploader | null = null;
 
     constructor(formElement: HTMLElement) {
       this.form = formElement;
@@ -227,41 +229,30 @@
           .map(tag => tag.trim())
           .filter(tag => tag.length > 0);
 
-        // Prepare form data for API upload
-        const formData = new FormData();
-        formData.append('video', this.selectedFile);
-        formData.append('title', this.titleInput.value.trim());
-        formData.append('tags', tags.join(','));
-
-        // Update progress
-        this.progressFill.style.width = '30%';
-        this.progressText.textContent = 'Uploading to server...';
-
-        // Upload to API
-        const uploadResponse = await fetch('/api/video/upload', {
-          method: 'POST',
-          body: formData
-        });
-
-        if (!uploadResponse.ok) {
-          throw new Error('Upload failed');
+        // Use chunked upload for large files, regular upload for smaller ones
+        const useChunkedUpload = shouldUseChunkedUpload(this.selectedFile);
+        
+        let uploadResult;
+        
+        if (useChunkedUpload) {
+          uploadResult = await this.chunkedUpload(tags);
+        } else {
+          uploadResult = await this.regularUpload(tags);
         }
 
-        const uploadResult = await uploadResponse.json();
-        
         if (!uploadResult.success) {
           throw new Error(uploadResult.message || 'Upload failed');
         }
 
-        this.progressFill.style.width = '60%';
+        this.progressFill.style.width = '80%';
         this.progressText.textContent = 'Processing video...';
 
         // Check if video needs conversion
         if (uploadResult.needsConversion) {
-          await this.handleVideoConversion(uploadResult.videoId);
+          await this.handleVideoConversion(uploadResult.videoId, uploadResult.fileUrl);
         } else {
           // Video is web-compatible, create video object directly
-          await this.createVideoObject(uploadResult.videoId);
+          await this.createVideoObject(uploadResult.videoId, undefined, uploadResult.fileUrl);
         }
 
         this.progressFill.style.width = '100%';
@@ -276,15 +267,126 @@
 
       } catch (error) {
         console.error('Upload failed:', error);
-        alert(`Upload failed: ${error.message}`);
-        this.uploading = false;
-        this.uploadBtn.disabled = false;
-        this.uploadBtn.textContent = 'Upload Video';
-        this.uploadProgress.style.display = 'none';
+        this.handleUploadError(error);
+        
+        // Abort current upload if active
+        if (this.currentUploader) {
+          this.currentUploader.abort();
+          this.currentUploader = null;
+        }
       }
     }
 
-    private async handleVideoConversion(videoId: string) {
+    private handleUploadError(error: any) {
+      this.uploading = false;
+      this.uploadBtn.disabled = false;
+      this.uploadBtn.textContent = 'Upload Video';
+      this.uploadProgress.style.display = 'none';
+
+      // Determine error type and show appropriate message
+      let errorMessage = 'Upload failed';
+      let canRetry = false;
+
+      if (error.message) {
+        if (error.message.includes('413') || error.message.includes('too large')) {
+          errorMessage = 'File too large. Please choose a smaller file (max 2GB).';
+        } else if (error.message.includes('400') || error.message.includes('Invalid')) {
+          errorMessage = 'Invalid file or request. Please check your file and try again.';
+        } else if (error.message.includes('500') || error.message.includes('Internal')) {
+          errorMessage = 'Server error. Please try again in a few moments.';
+          canRetry = true;
+        } else if (error.message.includes('Network') || error.message.includes('fetch')) {
+          errorMessage = 'Network error. Please check your connection and try again.';
+          canRetry = true;
+        } else {
+          errorMessage = error.message;
+        }
+      }
+
+      // Show error with optional retry button
+      this.showErrorMessage(errorMessage, canRetry);
+    }
+
+    private showErrorMessage(message: string, canRetry: boolean = false) {
+      // Create or update error message element
+      let errorDiv = this.form.querySelector('.error-message') as HTMLElement;
+      if (!errorDiv) {
+        errorDiv = document.createElement('div');
+        errorDiv.className = 'error-message';
+        this.uploadProgress.parentNode?.insertBefore(errorDiv, this.uploadProgress.nextSibling);
+      }
+
+      errorDiv.innerHTML = `
+        <div class="error-content">
+          <span class="error-icon">⚠</span>
+          <span class="error-text">${message}</span>
+          ${canRetry ? '<button class="retry-btn" onclick="this.closest(\'.upload-form\').querySelector(\'.upload-btn\').click()">Retry</button>' : ''}
+        </div>
+      `;
+      errorDiv.style.display = 'block';
+
+      // Auto-hide after 10 seconds
+      setTimeout(() => {
+        if (errorDiv) {
+          errorDiv.style.display = 'none';
+        }
+      }, 10000);
+    }
+
+    private async regularUpload(tags: string[]): Promise<any> {
+      // Prepare form data for API upload
+      const formData = new FormData();
+      formData.append('video', this.selectedFile!);
+      formData.append('title', this.titleInput.value.trim());
+      formData.append('tags', tags.join(','));
+
+      // Update progress
+      this.progressFill.style.width = '30%';
+      this.progressText.textContent = 'Uploading to server...';
+
+      // Upload to API
+      const uploadResponse = await fetch('/api/video/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Upload failed');
+      }
+
+      return await uploadResponse.json();
+    }
+
+    private async chunkedUpload(tags: string[]): Promise<any> {
+      this.progressText.textContent = 'Starting chunked upload...';
+
+      this.currentUploader = new ChunkedUploader({
+        file: this.selectedFile!,
+        metadata: {
+          title: this.titleInput.value.trim(),
+          tags: tags.join(',')
+        },
+        onProgress: (progress) => {
+          // Reserve 0-70% for upload, 70-80% for processing, 80-100% for conversion
+          const uploadProgress = Math.min(70, progress * 0.7);
+          this.progressFill.style.width = `${uploadProgress}%`;
+          this.progressText.textContent = `Uploading... ${Math.round(uploadProgress)}%`;
+        },
+        onChunkComplete: (chunkIndex, totalChunks) => {
+          this.progressText.textContent = `Uploading chunk ${chunkIndex + 1}/${totalChunks}...`;
+        },
+        onError: (error) => {
+          console.error('Chunked upload error:', error);
+        }
+      });
+
+      const result = await this.currentUploader.upload();
+      this.currentUploader = null;
+      
+      return result;
+    }
+
+    private async handleVideoConversion(videoId: string, fileUrl?: string) {
       // Start conversion process
       const processResponse = await fetch('/api/video/process', {
         method: 'POST',
@@ -320,7 +422,7 @@
             const status = await statusResponse.json();
             
             if (status.status === 'completed') {
-              await this.createVideoObject(videoId, status.thumbnailUrl);
+              await this.createVideoObject(videoId, status.thumbnailUrl, fileUrl);
               resolve();
             } else if (status.status === 'failed') {
               throw new Error('Video conversion failed');
@@ -346,14 +448,15 @@
       });
     }
 
-    private async createVideoObject(videoId: string, thumbnailUrl?: string) {
-      // For client-side storage, we still need the data URL
-      const videoUrl = await this.fileToDataURL(this.selectedFile);
-      
+    private async createVideoObject(videoId: string, thumbnailUrl?: string, fileUrl?: string) {
       const tags = this.tagsInput.value
         .split(',')
         .map(tag => tag.trim())
         .filter(tag => tag.length > 0);
+
+      // Use the server-provided file URL instead of creating data URLs
+      // This prevents memory issues with large files
+      const videoUrl = fileUrl || `/uploads/videos/${videoId}.mp4`;
 
       // Create video object
       const newVideo = {
@@ -388,14 +491,6 @@
       this.uploadProgress.style.display = 'none';
     }
 
-    private fileToDataURL(file: File): Promise<string> {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-    }
 
     private formatFileSize(bytes: number): string {
       if (bytes === 0) return '0 Bytes';
@@ -577,6 +672,51 @@
     border-radius: 8px;
     text-align: center;
     font-weight: 500;
+  }
+
+  .error-message {
+    background: #fef2f2;
+    border: 1px solid #dc2626;
+    border-radius: 8px;
+    padding: 15px;
+    margin-top: 15px;
+    display: none;
+  }
+
+  .error-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .error-icon {
+    color: #dc2626;
+    font-size: 18px;
+    font-weight: bold;
+  }
+
+  .error-text {
+    color: #7f1d1d;
+    font-weight: 500;
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .retry-btn {
+    background: #dc2626;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background 0.2s ease;
+  }
+
+  .retry-btn:hover {
+    background: #b91c1c;
   }
 
   .upload-btn {

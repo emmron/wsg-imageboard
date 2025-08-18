@@ -123,7 +123,7 @@ export function validateFile(file: File | null): ValidationResult {
   }
   
   // File size warnings for very large files
-  if (file.size > 500 * 1024 * 1024) { // > 500MB
+  if (file.size > 1024 * 1024 * 1024) { // > 1GB
     warnings.push('Large file detected. Upload may take longer and processing time will be extended.');
   }
   
@@ -151,13 +151,16 @@ function getFileExtension(filename: string): string {
   return lastDotIndex !== -1 ? filename.substring(lastDotIndex) : '';
 }
 
-// Function to detect video format and get metadata
+// Enhanced function to detect video format and get metadata
 export async function getVideoMetadata(file: File): Promise<{
   duration?: number;
   width?: number;
   height?: number;
   format?: string;
   canPlayInBrowser: boolean;
+  bitrate?: number;
+  frameRate?: number;
+  estimatedSize?: string;
 }> {
   return new Promise((resolve) => {
     const video = document.createElement('video');
@@ -165,43 +168,146 @@ export async function getVideoMetadata(file: File): Promise<{
     
     video.preload = 'metadata';
     video.muted = true;
+    video.volume = 0;
     
+    let metadataLoaded = false;
+    let timeoutId: number;
+    
+    const cleanup = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      URL.revokeObjectURL(url);
+      video.remove();
+    };
+    
+    const resolveMetadata = (metadata: any) => {
+      if (metadataLoaded) return;
+      metadataLoaded = true;
+      cleanup();
+      resolve(metadata);
+    };
+
     video.onloadedmetadata = () => {
-      const metadata = {
-        duration: video.duration,
-        width: video.videoWidth,
-        height: video.videoHeight,
-        format: file.type || 'unknown',
-        canPlayInBrowser: !video.error
-      };
-      
-      URL.revokeObjectURL(url);
-      resolve(metadata);
-    };
-    
-    video.onerror = () => {
-      const metadata = {
-        format: file.type || 'unknown',
-        canPlayInBrowser: false
-      };
-      
-      URL.revokeObjectURL(url);
-      resolve(metadata);
-    };
-    
-    // Set timeout to avoid hanging
-    setTimeout(() => {
-      if (video.readyState === 0) {
-        URL.revokeObjectURL(url);
-        resolve({
-          format: file.type || 'unknown',
-          canPlayInBrowser: false
+      try {
+        const duration = video.duration;
+        const width = video.videoWidth;
+        const height = video.videoHeight;
+        const canPlayInBrowser = !video.error && duration > 0 && !isNaN(duration);
+        
+        // Calculate estimated bitrate
+        let bitrate: number | undefined;
+        if (duration > 0 && file.size > 0) {
+          bitrate = Math.round((file.size * 8) / duration); // bits per second
+        }
+        
+        // Estimate frame rate (this is approximate)
+        let frameRate: number | undefined;
+        if (canPlayInBrowser) {
+          // Common frame rates to check against
+          const commonFrameRates = [23.976, 24, 25, 29.97, 30, 50, 59.94, 60];
+          
+          // For now, we'll estimate based on file size and duration
+          // In a real implementation, you'd use a library like ffprobe.js
+          if (width && height && duration) {
+            const pixelsPerSecond = width * height / duration;
+            if (pixelsPerSecond > 2000000) frameRate = 60;
+            else if (pixelsPerSecond > 1000000) frameRate = 30;
+            else frameRate = 24;
+          }
+        }
+
+        const metadata = {
+          duration: duration || undefined,
+          width: width || undefined,
+          height: height || undefined,
+          format: file.type || getFormatFromExtension(file.name),
+          canPlayInBrowser,
+          bitrate,
+          frameRate,
+          estimatedSize: formatFileSize(file.size)
+        };
+        
+        resolveMetadata(metadata);
+      } catch (error) {
+        console.warn('Error reading video metadata:', error);
+        resolveMetadata({
+          format: file.type || getFormatFromExtension(file.name),
+          canPlayInBrowser: false,
+          estimatedSize: formatFileSize(file.size)
         });
       }
-    }, 5000);
+    };
     
-    video.src = url;
+    video.onerror = (event) => {
+      console.warn('Video metadata loading failed:', event);
+      resolveMetadata({
+        format: file.type || getFormatFromExtension(file.name),
+        canPlayInBrowser: false,
+        estimatedSize: formatFileSize(file.size)
+      });
+    };
+    
+    video.onabort = () => {
+      resolveMetadata({
+        format: file.type || getFormatFromExtension(file.name),
+        canPlayInBrowser: false,
+        estimatedSize: formatFileSize(file.size)
+      });
+    };
+    
+    // Comprehensive timeout to avoid hanging
+    timeoutId = setTimeout(() => {
+      console.warn('Video metadata loading timed out');
+      resolveMetadata({
+        format: file.type || getFormatFromExtension(file.name),
+        canPlayInBrowser: false,
+        estimatedSize: formatFileSize(file.size)
+      });
+    }, 10000); // Increased timeout to 10 seconds
+    
+    // Try to load the video
+    try {
+      video.src = url;
+      video.load(); // Explicitly trigger load
+    } catch (error) {
+      console.warn('Failed to load video for metadata extraction:', error);
+      resolveMetadata({
+        format: file.type || getFormatFromExtension(file.name),
+        canPlayInBrowser: false,
+        estimatedSize: formatFileSize(file.size)
+      });
+    }
   });
+}
+
+// Helper function to guess format from file extension
+function getFormatFromExtension(filename: string): string {
+  const extension = getFileExtension(filename).toLowerCase();
+  const formatMap: { [key: string]: string } = {
+    '.mp4': 'video/mp4',
+    '.webm': 'video/webm',
+    '.ogg': 'video/ogg',
+    '.ogv': 'video/ogg',
+    '.avi': 'video/avi',
+    '.mov': 'video/quicktime',
+    '.wmv': 'video/x-ms-wmv',
+    '.flv': 'video/x-flv',
+    '.mkv': 'video/x-matroska',
+    '.3gp': 'video/3gpp',
+    '.m4v': 'video/m4v',
+    '.mpg': 'video/mpeg',
+    '.mpeg': 'video/mpeg'
+  };
+  
+  return formatMap[extension] || 'video/unknown';
+}
+
+// Helper function to format file size
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
 export function validateTitle(title: string): ValidationResult {
