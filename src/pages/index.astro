@@ -1,274 +1,432 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import Navigation from '../components/Navigation.astro';
 ---
 
-<Layout title="/wsg/ - Video Sharing General">
-  <!-- Board Header -->
-  <div class="board-header">
-    <a href="/" class="board-title">/wsg/ - Video Sharing General</a>
-    <div class="board-subtitle">Post webms, mp4s, share videos anonymously</div>
-  </div>
+<Layout title="Vimeo - Share your videos with the world">
+  <Navigation />
+  
+  <main class="main">
+    <!-- Hero Section -->
+    <section class="hero">
+      <div class="container">
+        <h1>Share your videos with the world</h1>
+        <p>Upload, host, and share videos that inspire, educate, and entertain. Create something amazing.</p>
+        <button class="btn btn-large hero-upload-btn" id="hero-upload-btn">
+          Upload your first video
+        </button>
+      </div>
+    </section>
 
-  <!-- Board Navigation -->
-  <div class="board-nav">
-    <a href="#top">[Return]</a>
-    <a href="#catalog">[Catalog]</a>
-    <a href="#bottom">[Bottom]</a>
-    <a href="#refresh" onclick="location.reload()">[Refresh]</a>
-  </div>
+    <!-- Video Grid Section -->
+    <section class="videos-section">
+      <div class="container">
+        <div class="section-header">
+          <h2>Recent uploads</h2>
+          <div class="section-controls">
+            <button class="filter-btn active" data-filter="all">All</button>
+            <button class="filter-btn" data-filter="recent">Recent</button>
+            <button class="filter-btn" data-filter="popular">Popular</button>
+          </div>
+        </div>
+        
+        <!-- Video Grid -->
+        <div class="videos-grid" id="videos-grid">
+          <!-- Videos will be inserted here -->
+        </div>
 
-  <!-- Post Form -->
-  <div class="post-form">
-    <table>
-      <tbody>
-        <tr>
-          <td><strong>Name</strong></td>
-          <td>
-            <input type="text" id="name-input" placeholder="Anonymous" maxlength="35" />
-          </td>
-        </tr>
-        <tr>
-          <td><strong>Subject</strong></td>
-          <td>
-            <input type="text" id="subject-input" maxlength="100" />
-          </td>
-        </tr>
-        <tr>
-          <td><strong>Comment</strong></td>
-          <td>
-            <textarea id="comment-input" rows="5" cols="50" maxlength="2000"></textarea>
-          </td>
-        </tr>
-        <tr>
-          <td><strong>File</strong></td>
-          <td>
-            <input type="file" id="file-input" accept="video/*" class="file-input" />
-            <div style="font-size: 11px; color: #666; margin-top: 2px;">
-              Max file size: 4MB. Allowed: webm, mp4, mov
-            </div>
-          </td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>
-            <input type="submit" value="Post" class="button" id="post-submit" />
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-
-  <!-- Thread Container -->
-  <div id="thread-container">
-    <!-- Posts will be inserted here -->
-  </div>
+        <!-- Empty State -->
+        <div class="empty-state" id="empty-state" style="display: none;">
+          <h3>No videos yet</h3>
+          <p>Be the first to share a video with the community</p>
+          <button class="btn btn-large" id="empty-upload-btn">Upload first video</button>
+        </div>
+      </div>
+    </section>
+  </main>
 
   <!-- Video Modal -->
   <div class="video-modal" id="video-modal">
-    <video id="modal-video" controls autoplay>
-      <track kind="captions" label="No captions available">
-    </video>
+    <div class="modal-content">
+      <button class="close-btn" id="close-modal">×</button>
+      <video class="modal-video" id="modal-video" controls>
+        <track kind="captions" label="No captions available">
+      </video>
+      <div class="modal-info">
+        <h3 class="modal-title" id="modal-title">Video Title</h3>
+        <div class="modal-meta" id="modal-meta">
+          <span class="modal-author">Anonymous</span>
+          <span class="modal-date">Just now</span>
+        </div>
+      </div>
+    </div>
   </div>
 </Layout>
 
 <script>
-  import { videos, addVideo } from '../lib/stores.ts';
-  import { generateHash, generateAnonymousHash } from '../lib/utils.ts';
+  import { videos, showUploadModal } from '../lib/stores.ts';
 
-  let postCounter = 1000000; // Start with high number like 4chan
-
-  class ImageBoard {
-    private threadContainer: HTMLElement;
-    private postSubmit: HTMLButtonElement;
-    private nameInput: HTMLInputElement;
-    private subjectInput: HTMLInputElement;
-    private commentInput: HTMLTextAreaElement;
-    private fileInput: HTMLInputElement;
+  class VimeoVideoApp {
+    private videosGrid: HTMLElement;
+    private emptyState: HTMLElement;
     private videoModal: HTMLElement;
     private modalVideo: HTMLVideoElement;
+    private modalTitle: HTMLElement;
+    private modalMeta: HTMLElement;
+    private closeModal: HTMLElement;
+    private heroUploadBtn: HTMLElement;
+    private emptyUploadBtn: HTMLElement;
+    private filterBtns: NodeListOf<HTMLElement>;
 
     constructor() {
-      this.threadContainer = document.getElementById('thread-container') as HTMLElement;
-      this.postSubmit = document.getElementById('post-submit') as HTMLButtonElement;
-      this.nameInput = document.getElementById('name-input') as HTMLInputElement;
-      this.subjectInput = document.getElementById('subject-input') as HTMLInputElement;
-      this.commentInput = document.getElementById('comment-input') as HTMLTextAreaElement;
-      this.fileInput = document.getElementById('file-input') as HTMLInputElement;
+      this.videosGrid = document.getElementById('videos-grid') as HTMLElement;
+      this.emptyState = document.getElementById('empty-state') as HTMLElement;
       this.videoModal = document.getElementById('video-modal') as HTMLElement;
       this.modalVideo = document.getElementById('modal-video') as HTMLVideoElement;
+      this.modalTitle = document.getElementById('modal-title') as HTMLElement;
+      this.modalMeta = document.getElementById('modal-meta') as HTMLElement;
+      this.closeModal = document.getElementById('close-modal') as HTMLElement;
+      this.heroUploadBtn = document.getElementById('hero-upload-btn') as HTMLElement;
+      this.emptyUploadBtn = document.getElementById('empty-upload-btn') as HTMLElement;
+      this.filterBtns = document.querySelectorAll('.filter-btn') as NodeListOf<HTMLElement>;
 
       this.setupEventListeners();
-      this.loadPosts();
+      this.loadVideos();
     }
 
     private setupEventListeners() {
-      this.postSubmit.addEventListener('click', this.handlePost.bind(this));
-      this.videoModal.addEventListener('click', this.closeModal.bind(this));
-      this.modalVideo.addEventListener('click', (e) => e.stopPropagation());
-    }
+      // Upload button listeners
+      this.heroUploadBtn?.addEventListener('click', () => {
+        showUploadModal.set(true);
+      });
 
-    private async handlePost() {
-      const subject = this.subjectInput.value.trim();
-      const comment = this.commentInput.value.trim();
-      const file = this.fileInput.files?.[0];
-      const name = this.nameInput.value.trim() || 'Anonymous';
+      this.emptyUploadBtn?.addEventListener('click', () => {
+        showUploadModal.set(true);
+      });
 
-      if (!comment && !file) {
-        alert('Post must have either comment or file.');
-        return;
-      }
-
-      if (file && !file.type.startsWith('video/')) {
-        alert('Only video files are allowed.');
-        return;
-      }
-
-      try {
-        this.postSubmit.disabled = true;
-        this.postSubmit.value = 'Posting...';
-
-        let videoUrl = '';
-        if (file) {
-          videoUrl = await this.fileToDataURL(file);
+      // Modal listeners
+      this.videoModal?.addEventListener('click', (e) => {
+        if (e.target === this.videoModal) {
+          this.closeVideoModal();
         }
+      });
 
-        const newPost = {
-          id: generateHash(comment + Date.now()),
-          uploaderHash: generateAnonymousHash(),
-          title: subject || 'Untitled',
-          url: videoUrl,
-          tags: this.extractTags(comment),
-          timestamp: Date.now(),
-          comments: [],
-          name: name,
-          subject: subject,
-          comment: comment,
-          filename: file?.name || '',
-          filesize: file?.size || 0,
-          postNumber: ++postCounter
-        };
+      this.closeModal?.addEventListener('click', () => {
+        this.closeVideoModal();
+      });
 
-        addVideo(newPost);
-        this.renderPost(newPost, true);
-        this.clearForm();
+      // Filter listeners
+      this.filterBtns?.forEach(btn => {
+        btn.addEventListener('click', () => {
+          this.filterBtns.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          this.filterVideos(btn.dataset.filter || 'all');
+        });
+      });
 
-      } catch (error) {
-        console.error('Post failed:', error);
-        alert('Failed to create post. Please try again.');
-      } finally {
-        this.postSubmit.disabled = false;
-        this.postSubmit.value = 'Post';
-      }
-    }
+      // Escape key to close modal
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && this.videoModal.classList.contains('active')) {
+          this.closeVideoModal();
+        }
+      });
 
-    private fileToDataURL(file: File): Promise<string> {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
+      // Subscribe to video store changes
+      videos.subscribe((videoList) => {
+        this.renderVideos(videoList);
       });
     }
 
-    private extractTags(text: string): string[] {
-      const tags = text.match(/#[a-zA-Z0-9_]+/g);
-      return tags ? tags.map(tag => tag.substring(1)) : [];
+    private loadVideos() {
+      const videoList = videos.get();
+      this.renderVideos(videoList);
     }
 
-    private clearForm() {
-      this.nameInput.value = '';
-      this.subjectInput.value = '';
-      this.commentInput.value = '';
-      this.fileInput.value = '';
-    }
-
-    private loadPosts() {
-      const allVideos = videos.get();
-      allVideos.forEach((video, index) => {
-        if (!video.postNumber) {
-          video.postNumber = postCounter - allVideos.length + index + 1;
-        }
-        this.renderPost(video, false);
-      });
-      
-      if (allVideos.length > 0) {
-        postCounter = Math.max(...allVideos.map(v => v.postNumber || 0));
+    private renderVideos(videoList: any[]) {
+      if (videoList.length === 0) {
+        this.emptyState.style.display = 'block';
+        this.videosGrid.style.display = 'none';
+        return;
       }
+
+      this.emptyState.style.display = 'none';
+      this.videosGrid.style.display = 'grid';
+      this.videosGrid.innerHTML = '';
+
+      videoList.forEach(video => {
+        this.createVideoCard(video);
+      });
     }
 
-    private renderPost(post: any, isNew: boolean = false) {
-      const postDiv = document.createElement('div');
-      postDiv.className = 'post op';
-      postDiv.innerHTML = `
-        <div class="post-header">
-          <span class="post-name">${post.name || 'Anonymous'}</span>
-          ${post.uploaderHash ? `<span class="post-trip">${post.uploaderHash}</span>` : ''}
-          <span class="post-time">${this.formatDate(new Date(post.timestamp))}</span>
-          <a href="#${post.postNumber}" class="post-number">No.${post.postNumber}</a>
-        </div>
-        ${post.subject ? `<div class="post-subject">${post.subject}</div>` : ''}
-        ${post.url ? `
-          <div class="post-file">
-            <div class="file-info">
-              File: <a href="${post.url}" target="_blank">${post.filename || 'video'}</a>
-              (${this.formatFileSize(post.filesize || 0)})
+    private createVideoCard(video: any) {
+      const card = document.createElement('div');
+      card.className = 'video-card';
+      card.innerHTML = `
+        <div class="video-thumbnail">
+          ${video.url ? `
+            <video class="video-thumb" src="${video.url}" preload="metadata" muted></video>
+            <div class="play-overlay">
+              <div class="play-icon"></div>
             </div>
-            <video class="file-thumb video-thumb" 
-                   src="${post.url}" 
-                   preload="metadata"
-                   onclick="window.imageBoard.openVideo('${post.url}')"
-                   muted>
-            </video>
+          ` : `
+            <div class="video-placeholder">
+              <div class="play-icon"></div>
+            </div>
+          `}
+        </div>
+        <div class="video-info">
+          <h3 class="video-title">${this.escapeHtml(video.title || 'Untitled')}</h3>
+          <div class="video-meta">
+            <span class="video-author">Anonymous</span>
+            <span class="video-date">${this.formatDate(new Date(video.timestamp))}</span>
           </div>
-        ` : ''}
-        <div class="post-message">${this.formatComment(post.comment || post.title)}</div>
+        </div>
       `;
 
-      if (isNew) {
-        this.threadContainer.insertBefore(postDiv, this.threadContainer.firstChild);
-      } else {
-        this.threadContainer.appendChild(postDiv);
+      card.addEventListener('click', () => {
+        this.openVideoModal(video);
+      });
+
+      this.videosGrid.appendChild(card);
+    }
+
+    private openVideoModal(video: any) {
+      if (!video.url) return;
+
+      this.modalVideo.src = video.url;
+      this.modalTitle.textContent = video.title || 'Untitled';
+      
+      const authorSpan = this.modalMeta.querySelector('.modal-author') as HTMLElement;
+      const dateSpan = this.modalMeta.querySelector('.modal-date') as HTMLElement;
+      
+      if (authorSpan) authorSpan.textContent = 'Anonymous';
+      if (dateSpan) dateSpan.textContent = this.formatDate(new Date(video.timestamp));
+
+      this.videoModal.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+
+    private closeVideoModal() {
+      this.videoModal.classList.remove('active');
+      this.modalVideo.src = '';
+      document.body.style.overflow = '';
+    }
+
+    private filterVideos(filter: string) {
+      const videoList = videos.get();
+      let filteredVideos = [...videoList];
+
+      switch (filter) {
+        case 'recent':
+          filteredVideos.sort((a, b) => b.timestamp - a.timestamp);
+          break;
+        case 'popular':
+          // Sort by number of comments (as a simple popularity metric)
+          filteredVideos.sort((a, b) => (b.comments?.length || 0) - (a.comments?.length || 0));
+          break;
+        default:
+          // 'all' - keep original order
+          break;
       }
+
+      this.renderVideos(filteredVideos);
     }
 
     private formatDate(date: Date): string {
-      const mm = String(date.getMonth() + 1).padStart(2, '0');
-      const dd = String(date.getDate()).padStart(2, '0');
-      const yy = String(date.getFullYear()).substring(2);
-      const hh = String(date.getHours()).padStart(2, '0');
-      const min = String(date.getMinutes()).padStart(2, '0');
-      const ss = String(date.getSeconds()).padStart(2, '0');
-      return `${mm}/${dd}/${yy}(${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][date.getDay()]})${hh}:${min}:${ss}`;
+      const now = new Date();
+      const diff = now.getTime() - date.getTime();
+      const seconds = Math.floor(diff / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const hours = Math.floor(minutes / 60);
+      const days = Math.floor(hours / 24);
+
+      if (days > 0) {
+        return days === 1 ? '1 day ago' : `${days} days ago`;
+      } else if (hours > 0) {
+        return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
+      } else if (minutes > 0) {
+        return minutes === 1 ? '1 minute ago' : `${minutes} minutes ago`;
+      } else {
+        return 'Just now';
+      }
     }
 
-    private formatFileSize(bytes: number): string {
-      if (bytes === 0) return '0 B';
-      const k = 1024;
-      const sizes = ['B', 'KB', 'MB', 'GB'];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-    }
-
-    private formatComment(text: string): string {
-      // Simple formatting - convert >quotes to green text
-      return text
-        .replace(/^&gt;(.+)$/gm, '<span class="quote">&gt;$1</span>')
-        .replace(/\n/g, '<br>');
-    }
-
-    public openVideo(url: string) {
-      this.modalVideo.src = url;
-      this.videoModal.style.display = 'flex';
-    }
-
-    private closeModal() {
-      this.videoModal.style.display = 'none';
-      this.modalVideo.src = '';
+    private escapeHtml(text: string): string {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
     }
   }
 
-  // Initialize the board
+  // Initialize the app
   document.addEventListener('DOMContentLoaded', () => {
-    (window as any).imageBoard = new ImageBoard();
+    new VimeoVideoApp();
   });
 </script>
+
+<style>
+  .main {
+    margin-top: 60px;
+    min-height: calc(100vh - 60px);
+  }
+
+  .hero {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    padding: 80px 0;
+    text-align: center;
+    border-bottom: 1px solid #e9ecef;
+  }
+
+  .hero h1 {
+    font-size: 48px;
+    font-weight: 300;
+    color: #333333;
+    margin-bottom: 20px;
+    letter-spacing: -2px;
+    line-height: 1.2;
+  }
+
+  .hero p {
+    font-size: 18px;
+    color: #666666;
+    margin-bottom: 40px;
+    font-weight: 300;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .hero-upload-btn {
+    font-size: 16px;
+    padding: 16px 32px;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(26, 183, 234, 0.3);
+    transition: all 0.3s ease;
+  }
+
+  .hero-upload-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(26, 183, 234, 0.4);
+  }
+
+  .videos-section {
+    padding: 60px 0;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 40px;
+  }
+
+  .section-header h2 {
+    font-size: 28px;
+    font-weight: 300;
+    color: #333333;
+    letter-spacing: -1px;
+  }
+
+  .section-controls {
+    display: flex;
+    gap: 10px;
+  }
+
+  .filter-btn {
+    background: transparent;
+    border: 1px solid #dddddd;
+    color: #666666;
+    padding: 8px 16px;
+    border-radius: 3px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+  }
+
+  .filter-btn:hover {
+    border-color: #1ab7ea;
+    color: #1ab7ea;
+  }
+
+  .filter-btn.active {
+    background: #1ab7ea;
+    border-color: #1ab7ea;
+    color: white;
+  }
+
+  .video-placeholder {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #f1f3f4 0%, #e8eaed 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .video-placeholder .play-icon {
+    opacity: 0.7;
+  }
+
+  /* Responsive Design */
+  @media (max-width: 768px) {
+    .hero {
+      padding: 60px 0;
+    }
+
+    .hero h1 {
+      font-size: 36px;
+    }
+
+    .hero p {
+      font-size: 16px;
+      margin-bottom: 30px;
+    }
+
+    .section-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 20px;
+    }
+
+    .section-header h2 {
+      font-size: 24px;
+    }
+
+    .section-controls {
+      align-self: stretch;
+    }
+
+    .filter-btn {
+      flex: 1;
+      text-align: center;
+    }
+
+    .videos-section {
+      padding: 40px 0;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .hero {
+      padding: 40px 0;
+    }
+
+    .hero h1 {
+      font-size: 28px;
+    }
+
+    .hero p {
+      font-size: 15px;
+    }
+
+    .section-header h2 {
+      font-size: 22px;
+    }
+
+    .filter-btn {
+      font-size: 13px;
+      padding: 6px 12px;
+    }
+  }
+</style>

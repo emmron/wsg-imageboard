@@ -2,34 +2,45 @@
 import UploadModal from './UploadModal.astro';
 ---
 
-<header>
-  <nav>
-    <div class="nav-brand">
-      <a href="/">🎭 AnonShare</a>
+<header class="header">
+  <div class="header-inner">
+    <div class="logo-section">
+      <a href="/" class="logo">Vimeo</a>
     </div>
     
-    <div class="nav-search">
-      <input 
-        type="text" 
-        placeholder="Search videos or tags..." 
-        id="search-input"
-        aria-label="Search videos and tags"
-      />
-      <button class="clear-btn" id="clear-search" style="display: none;">×</button>
+    <nav class="main-nav">
+      <a href="/" class="nav-link">Home</a>
+      <a href="/explore" class="nav-link">Explore</a>
+      <a href="/channels" class="nav-link">Channels</a>
+    </nav>
+    
+    <div class="search-section">
+      <div class="search-box">
+        <input 
+          type="text" 
+          placeholder="Search videos, people, or tags" 
+          id="search-input"
+          aria-label="Search videos, people, or tags"
+        />
+        <button class="search-btn" aria-label="Search">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z" fill="currentColor"/>
+          </svg>
+        </button>
+      </div>
     </div>
     
     <div class="nav-actions">
       <button 
-        class="upload-btn btn-premium glow-primary ripple" 
+        class="upload-btn" 
         id="upload-btn"
         aria-label="Upload new video"
-        aria-expanded="false"
       >
         <span class="upload-icon">+</span>
         <span>Upload</span>
       </button>
     </div>
-  </nav>
+  </div>
 </header>
 
 <UploadModal />
@@ -95,328 +106,208 @@ import UploadModal from './UploadModal.astro';
 </script>
 
 <style>
-  header {
-    background: rgba(45, 45, 45, 0.95);
-    border-bottom: 1px solid rgba(64, 64, 64, 0.8);
-    padding: 0 clamp(1rem, 4vw, 2rem);
-    backdrop-filter: blur(24px) saturate(180%);
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    box-shadow: 
-      0 1px 0 rgba(255, 255, 255, 0.05) inset,
-      0 4px 32px rgba(0, 0, 0, 0.12),
-      0 2px 8px rgba(0, 0, 0, 0.08);
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    will-change: transform, box-shadow;
-    contain: layout style paint;
-  }
-
-  header::before {
-    content: '';
-    position: absolute;
+  .header {
+    background: #ffffff;
+    border-bottom: 1px solid #e5e5e5;
+    position: fixed;
     top: 0;
     left: 0;
     right: 0;
-    height: 1px;
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgba(74, 222, 128, 0.3) 20%,
-      rgba(74, 222, 128, 0.6) 50%,
-      rgba(74, 222, 128, 0.3) 80%,
-      transparent 100%
-    );
-    opacity: 0;
-    transition: opacity 0.3s ease;
+    z-index: 1000;
+    height: 60px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   }
 
-  header:hover {
-    box-shadow: 
-      0 1px 0 rgba(255, 255, 255, 0.08) inset,
-      0 6px 40px rgba(0, 0, 0, 0.15),
-      0 4px 12px rgba(0, 0, 0, 0.1);
-  }
-
-  header:hover::before {
-    opacity: 1;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    header {
-      transition: none;
-    }
-    
-    header::before {
-      transition: none;
-    }
-  }
-
-  nav {
-    display: flex;
-    align-items: center;
+  .header-inner {
     max-width: 1200px;
     margin: 0 auto;
-    height: clamp(56px, 8vh, 64px);
-    gap: clamp(1rem, 3vw, 2rem);
-    padding: 0 clamp(0.25rem, 2vw, 0.5rem);
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    padding: 0 20px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 30px;
+  }
+
+  .logo-section {
+    flex-shrink: 0;
+  }
+
+  .logo {
+    font-size: 24px;
+    font-weight: 300;
+    color: #1ab7ea;
+    text-decoration: none;
+    letter-spacing: -1px;
+    transition: color 0.2s ease;
+  }
+
+  .logo:hover {
+    color: #158bb8;
+  }
+
+  .main-nav {
+    display: flex;
+    align-items: center;
+    gap: 30px;
+    flex-shrink: 0;
+  }
+
+  .nav-link {
+    color: #666666;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 400;
+    transition: color 0.2s ease;
     position: relative;
   }
 
-  nav::after {
+  .nav-link:hover {
+    color: #1ab7ea;
+  }
+
+  .nav-link::after {
     content: '';
     position: absolute;
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
+    bottom: -20px;
+    left: 0;
     width: 0;
     height: 2px;
-    background: linear-gradient(90deg, transparent, #4ade80, transparent);
-    transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    background: #1ab7ea;
+    transition: width 0.3s ease;
   }
 
-  nav:focus-within::after {
-    width: 80%;
+  .nav-link:hover::after {
+    width: 100%;
   }
 
+  .search-section {
+    flex: 1;
+    max-width: 400px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .search-box {
+    position: relative;
+    width: 100%;
+    max-width: 350px;
+  }
+
+  .search-box input {
+    width: 100%;
+    padding: 8px 40px 8px 12px;
+    border: 1px solid #dddddd;
+    border-radius: 3px;
+    font-size: 14px;
+    background: #f8f8f8;
+    transition: all 0.2s ease;
+    outline: none;
+  }
+
+  .search-box input:focus {
+    border-color: #1ab7ea;
+    background: white;
+    box-shadow: 0 0 0 2px rgba(26, 183, 234, 0.2);
+  }
+
+  .search-box input::placeholder {
+    color: #999999;
+  }
+
+  .search-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #999999;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 2px;
+    transition: color 0.2s ease;
+  }
+
+  .search-btn:hover {
+    color: #1ab7ea;
+  }
+
+  .nav-actions {
+    flex-shrink: 0;
+  }
+
+  .upload-btn {
+    background: #1ab7ea;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 3px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: inherit;
+  }
+
+  .upload-btn:hover {
+    background: #158bb8;
+  }
+
+  .upload-icon {
+    font-size: 16px;
+    font-weight: 300;
+    line-height: 1;
+    transition: transform 0.3s ease;
+  }
+
+  .upload-btn[aria-expanded="true"] .upload-icon {
+    transform: rotate(45deg);
+  }
+
+  /* Responsive Design */
   @media (max-width: 768px) {
-    nav {
-      gap: clamp(0.5rem, 2vw, 1rem);
+    .header-inner {
+      padding: 0 15px;
+      gap: 15px;
     }
 
-    .nav-search {
-      flex: 1;
+    .main-nav {
+      display: none;
+    }
+
+    .search-section {
       max-width: none;
-      min-width: 0;
     }
 
-    .upload-btn {
-      padding: clamp(0.5rem, 2vw, 0.75rem) clamp(0.75rem, 3vw, 1.5rem);
-      font-size: clamp(0.8rem, 3vw, 0.95rem);
-      white-space: nowrap;
+    .search-box {
+      max-width: none;
     }
 
     .upload-btn span:last-child {
       display: none;
     }
+
+    .upload-btn {
+      padding: 8px 12px;
+    }
   }
 
   @media (max-width: 480px) {
-    .nav-brand a {
-      font-size: clamp(1.25rem, 4vw, 1.75rem);
+    .header-inner {
+      gap: 10px;
     }
-  }
 
-  .nav-brand a {
-    font-size: 1.75rem;
-    font-weight: 700;
-    color: #4ade80;
-    text-decoration: none;
-    letter-spacing: -0.02em;
-    transition: all 0.2s ease;
-    position: relative;
-  }
-
-  .nav-brand a::after {
-    content: '';
-    position: absolute;
-    bottom: -2px;
-    left: 0;
-    width: 0;
-    height: 2px;
-    background: linear-gradient(90deg, #4ade80, #22c55e);
-    transition: width 0.3s ease;
-  }
-
-  .nav-brand a:hover {
-    color: #22c55e;
-    transform: translateY(-0.5px);
-    text-shadow: 0 0 20px rgba(74, 222, 128, 0.5);
-  }
-
-  .nav-brand a:hover::after {
-    width: 100%;
-    box-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
-  }
-
-  .nav-search {
-    flex: 1;
-    max-width: 450px;
-    position: relative;
-  }
-
-  .nav-search input {
-    width: 100%;
-    padding: clamp(0.6rem, 2vw, 0.75rem) clamp(1rem, 3vw, 1.25rem);
-    background: rgba(64, 64, 64, 0.8);
-    border: 1px solid rgba(85, 85, 85, 0.8);
-    border-radius: 12px;
-    color: #fff;
-    font-size: clamp(0.85rem, 2.5vw, 0.95rem);
-    backdrop-filter: blur(10px);
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    outline: none;
-    position: relative;
-    z-index: 1;
-    will-change: transform, box-shadow;
-  }
-
-  .nav-search input::placeholder {
-    transition: color 0.2s ease;
-  }
-
-  .nav-search input:focus {
-    border-color: #4ade80;
-    background: rgba(74, 222, 128, 0.12);
-    box-shadow: 
-      0 0 0 3px rgba(74, 222, 128, 0.25),
-      0 8px 32px rgba(74, 222, 128, 0.15),
-      0 4px 16px rgba(0, 0, 0, 0.1);
-    transform: translateY(-1px) scale(1.005);
-  }
-
-  .nav-search input:focus::placeholder {
-    color: rgba(255, 255, 255, 0.7);
-  }
-
-  @media (hover: hover) {
-    .nav-search input:hover:not(:focus) {
-      border-color: rgba(85, 85, 85, 1);
-      background: rgba(64, 64, 64, 0.9);
-      transform: translateY(-0.5px);
+    .logo {
+      font-size: 20px;
     }
-  }
 
-  .clear-btn {
-    position: absolute;
-    right: clamp(8px, 2vw, 12px);
-    top: 50%;
-    transform: translateY(-50%);
-    background: rgba(153, 153, 153, 0.1);
-    border: none;
-    color: #999;
-    cursor: pointer;
-    font-size: clamp(1rem, 2.5vw, 1.1rem);
-    padding: 0;
-    width: clamp(20px, 5vw, 24px);
-    height: clamp(20px, 5vw, 24px);
-    border-radius: 50%;
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    will-change: transform, background-color;
-  }
-
-  .clear-btn:hover {
-    background: rgba(220, 38, 38, 0.2);
-    color: #dc2626;
-    transform: translateY(-50%) scale(1.15) rotate(90deg);
-    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.2);
-  }
-
-  .clear-btn:active {
-    transform: translateY(-50%) scale(1.05) rotate(90deg);
-    transition-duration: 0.1s;
-  }
-
-  .clear-btn:focus-visible {
-    outline: 2px solid #4ade80;
-    outline-offset: 2px;
-  }
-
-  .upload-btn {
-    background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
-    color: #000;
-    border: none;
-    padding: clamp(0.6rem, 2vw, 0.75rem) clamp(1rem, 3vw, 1.5rem);
-    border-radius: 10px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: clamp(0.8rem, 2.5vw, 0.95rem);
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    box-shadow: 0 2px 8px rgba(74, 222, 128, 0.3);
-    position: relative;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    gap: clamp(0.25rem, 1vw, 0.5rem);
-    will-change: transform, box-shadow;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-  }
-
-  .upload-icon {
-    display: inline-block;
-    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    font-size: clamp(1rem, 2.5vw, 1.2rem);
-    font-weight: 300;
-    line-height: 1;
-    will-change: transform;
-  }
-
-  .upload-btn::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(255, 255, 255, 0.4),
-      transparent
-    );
-    transition: left 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .upload-btn::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 0;
-    height: 0;
-    background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, transparent 70%);
-    border-radius: 50%;
-    opacity: 0;
-    transition: all 0.3s ease;
-  }
-
-  .upload-btn:hover {
-    transform: translateY(-2px) scale(1.015);
-    box-shadow: 
-      0 12px 40px rgba(74, 222, 128, 0.4),
-      0 6px 16px rgba(0, 0, 0, 0.2);
-    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-  }
-
-  .upload-btn:hover::after {
-    width: 100%;
-    height: 100%;
-    opacity: 1;
-  }
-
-  .upload-btn:active {
-    transform: translateY(-1px) scale(1.005);
-    transition-duration: 0.1s;
-  }
-
-  .upload-btn:hover::before {
-    left: 100%;
-  }
-
-  .upload-btn:focus-visible {
-    outline: 2px solid #fff;
-    outline-offset: 2px;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .upload-btn::before,
-    .upload-btn::after {
-      display: none;
+    .search-box input {
+      font-size: 13px;
+      padding: 6px 35px 6px 10px;
     }
   }
 </style>

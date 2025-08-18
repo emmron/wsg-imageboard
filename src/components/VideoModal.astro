@@ -1,87 +1,26 @@
 ---
-import CommentForm from './CommentForm.astro';
 
-function formatDate(date: Date): string {
-  const now = new Date();
-  const diff = now.getTime() - date.getTime();
-  const minutes = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-  
-  if (minutes < 1) return 'Just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  if (days < 7) return `${days}d ago`;
-  return date.toLocaleDateString();
-}
 ---
 
-<div id="video-modal" class="video-modal modal-premium" style="display: none;">
-  <div class="modal-content card-premium" id="modal-content">
-    <button class="close-btn" id="close-video-modal" aria-label="Close video">×</button>
+<!-- Video Modal for clean Vimeo-style viewing -->
+<div id="video-modal" class="video-modal" style="display: none;">
+  <div class="modal-content">
+    <button class="close-btn" id="close-modal" aria-label="Close video">×</button>
     
-    <div class="video-player">
-      <video 
-        id="modal-video"
-        class="modal-video-element"
-        autoplay
-        controls={false}
-      >
-        <track kind="captions" label="No captions available">
-      </video>
-      
-      <div class="video-overlay" id="video-overlay">
-        <div class="play-button" id="play-button" style="display: none;">
-          <div class="play-icon">▶</div>
-        </div>
-      </div>
-      
-      <div class="video-controls" id="video-controls">
-        <div class="progress-bar" id="progress-bar">
-          <div class="progress-fill" id="progress-fill"></div>
-        </div>
-        
-        <div class="controls-row">
-          <button class="control-btn" id="play-pause-btn">▶</button>
-          
-          <span class="time-display" id="time-display">0:00 / 0:00</span>
-          
-          <div class="volume-control">
-            <span class="volume-icon">🔊</span>
-            <input 
-              type="range" 
-              min="0" 
-              max="1" 
-              step="0.1"
-              value="1"
-              class="volume-slider"
-              id="volume-slider"
-            />
-          </div>
-        </div>
-      </div>
-    </div>
+    <video 
+      id="modal-video" 
+      class="modal-video" 
+      controls
+      autoplay
+    >
+      <track kind="captions" label="No captions available">
+    </video>
     
-    <div class="video-details">
-      <h3 id="video-title"></h3>
-      <div class="video-meta">
-        <span class="hash" id="video-hash"></span>
-        <span class="date" id="video-date"></span>
-        <span class="comments-count" id="comments-count"></span>
-      </div>
-      
-      <div class="video-tags" id="video-tags"></div>
-      
-      <div class="comments-section">
-        <h4 id="comments-header">Comments (0)</h4>
-        
-        <CommentForm />
-        
-        <div class="no-comments" id="no-comments">
-          <p>No comments yet. Be the first to comment!</p>
-        </div>
-        
-        <div class="comments-list" id="comments-list"></div>
+    <div class="modal-info">
+      <h3 class="modal-title" id="modal-title">Video Title</h3>
+      <div class="modal-meta" id="modal-meta">
+        <span class="modal-author">Anonymous</span>
+        <span class="modal-date">Just now</span>
       </div>
     </div>
   </div>
@@ -89,36 +28,14 @@ function formatDate(date: Date): string {
 
 <script>
   import { selectedVideo } from '../lib/stores.ts';
-  import { getAnonymousHashColor } from '../lib/utils.ts';
 
   class VideoModal {
     private modal: HTMLElement;
-    private modalContent: HTMLElement;
     private video: HTMLVideoElement;
-    private overlay: HTMLElement;
-    private playButton: HTMLElement;
-    private controls: HTMLElement;
-    private progressBar: HTMLElement;
-    private progressFill: HTMLElement;
-    private playPauseBtn: HTMLButtonElement;
-    private timeDisplay: HTMLElement;
-    private volumeSlider: HTMLInputElement;
     private closeBtn: HTMLButtonElement;
-
-    // Video details elements
-    private videoTitle: HTMLElement;
-    private videoHash: HTMLElement;
-    private videoDate: HTMLElement;
-    private commentsCount: HTMLElement;
-    private videoTags: HTMLElement;
-    private commentsHeader: HTMLElement;
-    private noComments: HTMLElement;
-    private commentsList: HTMLElement;
-
+    private modalTitle: HTMLElement;
+    private modalMeta: HTMLElement;
     private currentVideo: any = null;
-    private isPlaying = false;
-    private showControls = true;
-    private controlsTimeout: number | null = null;
 
     constructor() {
       this.initializeElements();
@@ -128,60 +45,16 @@ function formatDate(date: Date): string {
 
     private initializeElements() {
       this.modal = document.getElementById('video-modal') as HTMLElement;
-      this.modalContent = document.getElementById('modal-content') as HTMLElement;
       this.video = document.getElementById('modal-video') as HTMLVideoElement;
-      this.overlay = document.getElementById('video-overlay') as HTMLElement;
-      this.playButton = document.getElementById('play-button') as HTMLElement;
-      this.controls = document.getElementById('video-controls') as HTMLElement;
-      this.progressBar = document.getElementById('progress-bar') as HTMLElement;
-      this.progressFill = document.getElementById('progress-fill') as HTMLElement;
-      this.playPauseBtn = document.getElementById('play-pause-btn') as HTMLButtonElement;
-      this.timeDisplay = document.getElementById('time-display') as HTMLElement;
-      this.volumeSlider = document.getElementById('volume-slider') as HTMLInputElement;
-      this.closeBtn = document.getElementById('close-video-modal') as HTMLButtonElement;
-
-      this.videoTitle = document.getElementById('video-title') as HTMLElement;
-      this.videoHash = document.getElementById('video-hash') as HTMLElement;
-      this.videoDate = document.getElementById('video-date') as HTMLElement;
-      this.commentsCount = document.getElementById('comments-count') as HTMLElement;
-      this.videoTags = document.getElementById('video-tags') as HTMLElement;
-      this.commentsHeader = document.getElementById('comments-header') as HTMLElement;
-      this.noComments = document.getElementById('no-comments') as HTMLElement;
-      this.commentsList = document.getElementById('comments-list') as HTMLElement;
+      this.closeBtn = document.getElementById('close-modal') as HTMLButtonElement;
+      this.modalTitle = document.getElementById('modal-title') as HTMLElement;
+      this.modalMeta = document.getElementById('modal-meta') as HTMLElement;
     }
 
     private setupEventListeners() {
       // Modal events
       this.modal.addEventListener('click', this.handleModalClick.bind(this));
       this.closeBtn.addEventListener('click', this.closeModal.bind(this));
-
-      // Video events
-      this.video.addEventListener('timeupdate', this.handleTimeUpdate.bind(this));
-      this.video.addEventListener('loadedmetadata', this.handleTimeUpdate.bind(this));
-      this.video.addEventListener('play', () => {
-        this.isPlaying = true;
-        this.playPauseBtn.textContent = '⏸';
-        this.playButton.style.display = 'none';
-      });
-      this.video.addEventListener('pause', () => {
-        this.isPlaying = false;
-        this.playPauseBtn.textContent = '▶';
-        this.playButton.style.display = 'flex';
-      });
-      this.video.addEventListener('ended', () => {
-        this.isPlaying = false;
-        this.playPauseBtn.textContent = '▶';
-        this.playButton.style.display = 'flex';
-      });
-
-      // Control events
-      this.overlay.addEventListener('click', this.togglePlay.bind(this));
-      this.playPauseBtn.addEventListener('click', this.togglePlay.bind(this));
-      this.progressBar.addEventListener('click', this.handleSeek.bind(this));
-      this.volumeSlider.addEventListener('input', this.handleVolumeChange.bind(this));
-
-      // Mouse movement for controls
-      this.modal.addEventListener('mousemove', this.handleMouseMove.bind(this));
 
       // Keyboard events
       document.addEventListener('keydown', this.handleKeyPress.bind(this));
@@ -200,74 +73,28 @@ function formatDate(date: Date): string {
     private showModal(video: any) {
       this.currentVideo = video;
       this.populateVideoData(video);
-      this.modal.style.display = 'flex';
-      this.modalContent.focus();
+      this.modal.classList.add('active');
       document.body.style.overflow = 'hidden';
 
       // Set video source
       this.video.src = video.url;
-
-      // Animation
-      this.modal.style.opacity = '0';
-      this.modalContent.style.transform = 'scale(0.9)';
-      
-      requestAnimationFrame(() => {
-        this.modal.style.transition = 'opacity 0.2s ease';
-        this.modalContent.style.transition = 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
-        this.modal.style.opacity = '1';
-        this.modalContent.style.transform = 'scale(1)';
-      });
     }
 
     private hideModal() {
-      this.modal.style.display = 'none';
+      this.modal.classList.remove('active');
       document.body.style.overflow = '';
       this.video.src = '';
       this.currentVideo = null;
     }
 
     private populateVideoData(video: any) {
-      this.videoTitle.textContent = video.title;
-      this.videoHash.textContent = video.uploaderHash;
-      this.videoDate.textContent = this.formatDate(new Date(video.timestamp));
-      this.commentsCount.textContent = `💬 ${video.comments.length}`;
-      this.commentsHeader.textContent = `Comments (${video.comments.length})`;
-
-      // Tags
-      if (video.tags.length > 0) {
-        this.videoTags.innerHTML = video.tags
-          .map((tag: string) => `<span class="tag">${tag}</span>`)
-          .join('');
-        this.videoTags.style.display = 'flex';
-      } else {
-        this.videoTags.style.display = 'none';
-      }
-
-      // Comments
-      if (video.comments.length === 0) {
-        this.noComments.style.display = 'block';
-        this.commentsList.style.display = 'none';
-      } else {
-        this.noComments.style.display = 'none';
-        this.commentsList.style.display = 'block';
-        this.commentsList.innerHTML = video.comments
-          .map((comment: any) => `
-            <div class="comment">
-              <div class="comment-header">
-                <span class="comment-hash" style="color: ${this.getHashColor(comment.userHash)}">${comment.userHash}</span>
-                <span class="comment-date">${this.formatDate(new Date(comment.timestamp))}</span>
-              </div>
-              <p class="comment-text">${comment.text}</p>
-            </div>
-          `)
-          .join('');
-      }
-
-      // Update CommentForm with video ID
-      const commentForm = document.querySelector('.comment-form');
-      if (commentForm) {
-        commentForm.setAttribute('data-video-id', video.id);
-      }
+      this.modalTitle.textContent = video.title || 'Untitled';
+      
+      const authorSpan = this.modalMeta.querySelector('.modal-author') as HTMLElement;
+      const dateSpan = this.modalMeta.querySelector('.modal-date') as HTMLElement;
+      
+      if (authorSpan) authorSpan.textContent = 'Anonymous';
+      if (dateSpan) dateSpan.textContent = this.formatDate(new Date(video.timestamp));
     }
 
     private closeModal() {
@@ -280,78 +107,14 @@ function formatDate(date: Date): string {
       }
     }
 
-    private togglePlay() {
-      if (this.video.paused) {
-        this.video.play();
-      } else {
-        this.video.pause();
-      }
-    }
-
-    private handleTimeUpdate() {
-      if (this.video.duration) {
-        const progress = (this.video.currentTime / this.video.duration) * 100;
-        this.progressFill.style.width = `${progress}%`;
-        this.timeDisplay.textContent = `${this.formatTime(this.video.currentTime)} / ${this.formatTime(this.video.duration)}`;
-      }
-    }
-
-    private handleSeek(event: MouseEvent) {
-      if (this.video.duration) {
-        const rect = this.progressBar.getBoundingClientRect();
-        const pos = (event.clientX - rect.left) / rect.width;
-        this.video.currentTime = pos * this.video.duration;
-      }
-    }
-
-    private handleVolumeChange() {
-      this.video.volume = parseFloat(this.volumeSlider.value);
-    }
-
-    private handleMouseMove() {
-      this.showControls = true;
-      this.controls.style.opacity = '1';
-      
-      if (this.controlsTimeout) {
-        clearTimeout(this.controlsTimeout);
-      }
-      
-      this.controlsTimeout = window.setTimeout(() => {
-        if (this.isPlaying) {
-          this.controls.style.opacity = '0';
-        }
-      }, 3000);
-    }
-
     private handleKeyPress(event: KeyboardEvent) {
       if (!this.currentVideo) return;
 
       switch (event.key) {
-        case ' ':
-          event.preventDefault();
-          this.togglePlay();
-          break;
         case 'Escape':
           this.closeModal();
           break;
-        case 'ArrowLeft':
-          if (this.video) {
-            this.video.currentTime -= 10;
-          }
-          break;
-        case 'ArrowRight':
-          if (this.video) {
-            this.video.currentTime += 10;
-          }
-          break;
       }
-    }
-
-    private formatTime(seconds: number): string {
-      if (!seconds || !isFinite(seconds)) return '0:00';
-      const mins = Math.floor(seconds / 60);
-      const secs = Math.floor(seconds % 60);
-      return `${mins}:${secs.toString().padStart(2, '0')}`;
     }
 
     private formatDate(date: Date): string {
@@ -367,10 +130,6 @@ function formatDate(date: Date): string {
       if (days < 7) return `${days}d ago`;
       return date.toLocaleDateString();
     }
-
-    private getHashColor(hash: string): string {
-      return getAnonymousHashColor(hash);
-    }
   }
 
   // Initialize video modal
@@ -384,640 +143,112 @@ function formatDate(date: Date): string {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.95);
-    backdrop-filter: blur(32px) saturate(120%);
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.9);
+    z-index: 2000;
+    display: none;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
-    cursor: pointer;
-    outline: none;
-    padding: clamp(1rem, 4vw, 2rem);
-    overscroll-behavior: none;
-    opacity: 0;
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    padding: 20px;
   }
 
-  .video-modal[style*="flex"] {
-    opacity: 1;
+  .video-modal.active {
+    display: flex;
   }
 
   .modal-content {
-    background: rgba(45, 45, 45, 0.95);
-    border-radius: 20px;
-    max-width: clamp(320px, 90vw, 1000px);
-    max-height: clamp(480px, 90vh, 800px);
-    width: 100%;
-    overflow-y: auto;
+    background: white;
+    border-radius: 4px;
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow: hidden;
     position: relative;
-    cursor: default;
-    box-shadow: 
-      0 1px 0 rgba(255, 255, 255, 0.1) inset,
-      0 32px 80px rgba(0, 0, 0, 0.4),
-      0 16px 32px rgba(0, 0, 0, 0.3),
-      0 0 0 1px rgba(74, 222, 128, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    backdrop-filter: blur(24px) saturate(180%);
-    outline: none;
-    tabindex: -1;
-    transform: scale(0.9) translateY(20px);
-    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-    will-change: transform, opacity;
-    contain: layout style paint;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
   }
 
-  .video-modal[style*="flex"] .modal-content {
-    transform: scale(1) translateY(0);
+  .modal-video {
+    width: 100%;
+    height: auto;
+    max-height: 70vh;
+    display: block;
+    background: black;
+  }
+
+  .modal-info {
+    padding: 20px;
+  }
+
+  .modal-title {
+    font-size: 20px;
+    font-weight: 500;
+    color: #333333;
+    margin-bottom: 10px;
+    line-height: 1.3;
+  }
+
+  .modal-meta {
+    color: #666666;
+    font-size: 14px;
+    margin-bottom: 15px;
+  }
+
+  .modal-author {
+    color: #1ab7ea;
+    text-decoration: none;
+    font-weight: 500;
+  }
+
+  .modal-author:hover {
+    color: #158bb8;
+  }
+
+  .modal-date {
+    color: #999999;
   }
 
   .close-btn {
     position: absolute;
-    top: clamp(0.75rem, 2vw, 1rem);
-    right: clamp(0.75rem, 2vw, 1rem);
-    background: rgba(0, 0, 0, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #fff;
+    top: 15px;
+    right: 20px;
+    background: rgba(0,0,0,0.7);
+    border: none;
+    font-size: 24px;
+    color: white;
     cursor: pointer;
-    font-size: clamp(1.25rem, 3vw, 1.5rem);
-    padding: 0;
+    z-index: 10;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
-    width: clamp(36px, 8vw, 40px);
-    height: clamp(36px, 8vw, 40px);
-    z-index: 1001;
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     display: flex;
     align-items: center;
     justify-content: center;
-    backdrop-filter: blur(10px) saturate(150%);
-    will-change: transform, background-color;
-  }
-
-  .close-btn::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(135deg, rgba(220, 38, 38, 0.8), rgba(239, 68, 68, 0.9));
-    border-radius: 50%;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    z-index: -1;
+    transition: background 0.2s ease;
   }
 
   .close-btn:hover {
-    transform: scale(1.1) rotate(90deg);
-    color: #fff;
+    background: rgba(0,0,0,0.9);
   }
 
-  .close-btn:hover::before {
-    opacity: 1;
-  }
-
-  .close-btn:active {
-    transform: scale(1.05) rotate(90deg);
-    transition-duration: 0.1s;
-  }
-
-  .close-btn:focus-visible {
-    outline: 2px solid #dc2626;
-    outline-offset: 2px;
-  }
-
-  .video-player {
-    position: relative;
-    background: linear-gradient(135deg, #000 0%, #0a0a0a 100%);
-    border-radius: 20px 20px 0 0;
-    overflow: hidden;
-    isolation: isolate;
-  }
-
-  .modal-video-element {
-    width: 100%;
-    max-height: clamp(300px, 60vh, 600px);
-    display: block;
-    object-fit: cover;
-    filter: brightness(0.95) contrast(1.05);
-    transition: filter 0.3s ease;
-  }
-
-  .video-player:hover .modal-video-element {
-    filter: brightness(1) contrast(1.1);
-  }
-
-  .video-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-  }
-
-  .play-button {
-    opacity: 0.8;
-    transition: opacity 0.2s ease;
-  }
-
-  .play-button:hover {
-    opacity: 1;
-  }
-
-  .play-icon {
-    background: 
-      linear-gradient(135deg, #4ade80 0%, #22c55e 50%, #16a34a 100%),
-      radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.3) 0%, transparent 50%);
-    color: #000;
-    width: clamp(70px, 10vw, 80px);
-    height: clamp(70px, 10vw, 80px);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: clamp(1.75rem, 4vw, 2rem);
-    font-weight: bold;
-    padding-left: 3px;
-    box-shadow: 
-      0 8px 32px rgba(74, 222, 128, 0.6),
-      0 4px 16px rgba(0, 0, 0, 0.4),
-      0 0 0 3px rgba(255, 255, 255, 0.3),
-      0 2px 4px rgba(74, 222, 128, 0.2) inset;
-    backdrop-filter: blur(10px) saturate(150%);
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    will-change: transform, box-shadow;
-  }
-
-  .play-button:hover .play-icon {
-    transform: scale(1.1);
-    box-shadow: 
-      0 12px 40px rgba(74, 222, 128, 0.7),
-      0 6px 20px rgba(0, 0, 0, 0.5),
-      0 0 0 4px rgba(255, 255, 255, 0.4),
-      0 2px 4px rgba(74, 222, 128, 0.3) inset;
-  }
-
-  .video-controls {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: linear-gradient(
-      transparent,
-      rgba(0, 0, 0, 0.4),
-      rgba(0, 0, 0, 0.8)
-    );
-    padding: clamp(0.75rem, 2vw, 1rem);
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    backdrop-filter: blur(16px) saturate(150%);
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-  }
-
-  .progress-bar {
-    width: 100%;
-    height: 8px;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 4px;
-    margin-bottom: clamp(0.75rem, 2vw, 1rem);
-    cursor: pointer;
-    position: relative;
-    overflow: hidden;
-    transition: all 0.2s ease;
-  }
-
-  .progress-bar::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(255, 255, 255, 0.1);
-    opacity: 0;
-    transition: opacity 0.2s ease;
-  }
-
-  .progress-bar:hover {
-    height: 10px;
-    transform: translateY(-1px);
-  }
-
-  .progress-bar:hover::before {
-    opacity: 1;
-  }
-
-  .progress-fill {
-    height: 100%;
-    background: linear-gradient(90deg, #4ade80 0%, #22c55e 100%);
-    border-radius: 4px;
-    transition: width 0.1s ease;
-    width: 0%;
-    position: relative;
-    box-shadow: 0 0 8px rgba(74, 222, 128, 0.4);
-  }
-
-  .progress-fill::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    right: 0;
-    transform: translateY(-50%);
-    width: 12px;
-    height: 12px;
-    background: #fff;
-    border-radius: 50%;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-    opacity: 0;
-    transition: opacity 0.2s ease;
-  }
-
-  .progress-bar:hover .progress-fill::after {
-    opacity: 1;
-  }
-
-  .controls-row {
-    display: flex;
-    align-items: center;
-    gap: clamp(0.75rem, 2vw, 1rem);
-    color: #fff;
-    flex-wrap: wrap;
-  }
-
-  .control-btn {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: #fff;
-    font-size: clamp(1rem, 2.5vw, 1.2rem);
-    cursor: pointer;
-    padding: clamp(0.4rem, 1vw, 0.5rem);
-    border-radius: 8px;
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    backdrop-filter: blur(10px);
-    min-width: clamp(36px, 8vw, 40px);
-    min-height: clamp(36px, 8vw, 40px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    will-change: transform, background-color;
-  }
-
-  .control-btn:hover {
-    background: rgba(74, 222, 128, 0.2);
-    border-color: rgba(74, 222, 128, 0.4);
-    transform: translateY(-1px) scale(1.05);
-    box-shadow: 0 4px 16px rgba(74, 222, 128, 0.2);
-  }
-
-  .control-btn:active {
-    transform: translateY(0) scale(1);
-    transition-duration: 0.1s;
-  }
-
-  .control-btn:focus-visible {
-    outline: 2px solid #4ade80;
-    outline-offset: 2px;
-  }
-
-  .time-display {
-    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
-    font-size: clamp(0.8rem, 2vw, 0.9rem);
-    color: #ccc;
-    background: rgba(0, 0, 0, 0.3);
-    padding: clamp(0.25rem, 1vw, 0.3rem) clamp(0.4rem, 1.5vw, 0.5rem);
-    border-radius: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(8px);
-    min-width: clamp(80px, 15vw, 100px);
-    text-align: center;
-    transition: all 0.2s ease;
-  }
-
-  .time-display:hover {
-    background: rgba(0, 0, 0, 0.5);
-    color: #fff;
-  }
-
-  .volume-control {
-    display: flex;
-    align-items: center;
-    gap: clamp(0.4rem, 1vw, 0.5rem);
-    margin-left: auto;
-    background: rgba(0, 0, 0, 0.2);
-    padding: clamp(0.4rem, 1vw, 0.5rem) clamp(0.6rem, 1.5vw, 0.75rem);
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(8px);
-    transition: all 0.2s ease;
-  }
-
-  .volume-control:hover {
-    background: rgba(0, 0, 0, 0.4);
-  }
-
-  .volume-icon {
-    font-size: 1rem;
-  }
-
-  .volume-slider {
-    width: 80px;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.3);
-    border-radius: 2px;
-    outline: none;
-    cursor: pointer;
-    appearance: none;
-  }
-
-  .volume-slider::-webkit-slider-thumb {
-    appearance: none;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: #4ade80;
-    cursor: pointer;
-  }
-
-  .video-details {
-    padding: 1.5rem;
-  }
-
-  .video-details h3 {
-    margin: 0 0 1rem 0;
-    color: #fff;
-    font-size: 1.3rem;
-  }
-
-  .video-meta {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 1rem;
-    font-size: 0.9rem;
-    flex-wrap: wrap;
-  }
-
-  .hash {
-    color: #4ade80;
-    font-weight: 500;
-    font-family: monospace;
-  }
-
-  .date, .comments-count {
-    color: #999;
-  }
-
-  .video-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-bottom: 2rem;
-  }
-
-  .tag {
-    background: #404040;
-    color: #ccc;
-    padding: 0.3rem 0.8rem;
-    border-radius: 20px;
-    font-size: 0.8rem;
-    transition: background 0.2s ease;
-  }
-
-  .tag:hover {
-    background: #4ade80;
-    color: #000;
-  }
-
-  .comments-section h4 {
-    color: #4ade80;
-    margin-bottom: 1rem;
-    font-size: 1.1rem;
-  }
-
-  .comments-list {
-    margin-top: 1.5rem;
-  }
-
-  .comment {
-    background: #404040;
-    border-radius: 6px;
-    padding: 1rem;
-    margin-bottom: 1rem;
-    transition: background 0.2s ease;
-  }
-
-  .comment:hover {
-    background: #4a4a4a;
-  }
-
-  .comment-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0.5rem;
-    font-size: 0.8rem;
-  }
-
-  .comment-hash {
-    color: #4ade80;
-    font-weight: 500;
-    font-family: monospace;
-  }
-
-  .comment-date {
-    color: #999;
-  }
-
-  .comment-text {
-    margin: 0;
-    color: #fff;
-    line-height: 1.4;
-    word-wrap: break-word;
-  }
-
-  .no-comments {
-    color: #999;
-    font-style: italic;
-    text-align: center;
-    padding: 2rem;
-    background: #404040;
-    border-radius: 6px;
-  }
-
-  .no-comments p {
-    margin: 0;
-  }
-
+  /* Responsive Design */
   @media (max-width: 768px) {
-    .video-modal {
-      padding: clamp(0.5rem, 2vw, 1rem);
-    }
-
     .modal-content {
-      width: 100%;
+      max-width: 95vw;
       max-height: 95vh;
-      border-radius: 16px;
     }
 
-    .video-player {
-      border-radius: 16px 16px 0 0;
-    }
-
-    .modal-video-element {
-      max-height: clamp(250px, 50vh, 400px);
-    }
-
-    .play-icon {
-      width: clamp(50px, 12vw, 60px);
-      height: clamp(50px, 12vw, 60px);
-      font-size: clamp(1.25rem, 4vw, 1.5rem);
-    }
-
-    .video-details {
-      padding: clamp(0.875rem, 3vw, 1rem);
-    }
-
-    .video-details h3 {
-      font-size: clamp(1.1rem, 4vw, 1.3rem);
-    }
-
-    .video-meta {
-      font-size: clamp(0.8rem, 2vw, 0.9rem);
-      gap: clamp(0.5rem, 2vw, 1rem);
-    }
-
-    .controls-row {
-      gap: clamp(0.4rem, 2vw, 0.5rem);
-      justify-content: space-between;
-    }
-
-    .control-btn {
-      min-width: 36px;
-      min-height: 36px;
-      font-size: 1rem;
-    }
-
-    .time-display {
-      font-size: 0.75rem;
-      min-width: 70px;
-      padding: 0.2rem 0.4rem;
-    }
-
-    .volume-control {
-      padding: 0.3rem 0.5rem;
-    }
-
-    .volume-slider {
-      width: 60px;
-    }
-
-    .progress-bar {
-      height: 10px;
-      margin-bottom: 0.75rem;
-    }
-
-    .progress-bar:hover {
-      height: 12px;
-    }
-
-    .tag {
-      font-size: clamp(0.7rem, 2vw, 0.8rem);
-      padding: 0.25rem 0.6rem;
-    }
-
-    .comment {
-      padding: clamp(0.75rem, 3vw, 1rem);
-    }
-
-    .comment-header {
-      font-size: clamp(0.75rem, 2vw, 0.8rem);
-    }
-
-    .comment-text {
-      font-size: clamp(0.85rem, 3vw, 0.9rem);
+    .modal-info {
+      padding: 15px;
     }
   }
 
   @media (max-width: 480px) {
-    .modal-content {
-      border-radius: 12px;
+    .modal-info {
+      padding: 12px;
     }
 
-    .video-player {
-      border-radius: 12px 12px 0 0;
-    }
-
-    .modal-video-element {
-      max-height: clamp(200px, 40vh, 300px);
-    }
-
-    .play-icon {
-      width: 45px;
-      height: 45px;
-      font-size: 1.1rem;
-    }
-
-    .video-details {
-      padding: 0.75rem;
-    }
-
-    .controls-row {
-      flex-wrap: wrap;
-      gap: 0.3rem;
-    }
-
-    .time-display {
-      order: 1;
-      flex: 1;
-      min-width: 60px;
-    }
-
-    .volume-control {
-      order: 2;
-      margin-left: 0;
-      flex-shrink: 0;
-    }
-
-    .control-btn {
-      order: 3;
-    }
-
-    .progress-bar {
-      height: 12px;
-    }
-
-    .progress-bar:hover {
-      height: 14px;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .video-modal,
-    .modal-content,
-    .close-btn,
-    .play-icon,
-    .control-btn,
-    .progress-bar,
-    .progress-fill,
-    .time-display,
-    .volume-control {
-      transition: none !important;
-      animation: none !important;
-    }
-
-    .close-btn:hover {
-      transform: none !important;
-    }
-
-    .control-btn:hover {
-      transform: none !important;
-    }
-
-    .play-button:hover .play-icon {
-      transform: none !important;
+    .modal-title {
+      font-size: 18px;
     }
   }
 </style>
