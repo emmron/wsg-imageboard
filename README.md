@@ -4,7 +4,8 @@ A modern content subscription platform similar to OnlyFans, built with Astro, Su
 
 ## Features
 
-- 🔐 **User Authentication** - Secure signup/login with Supabase Auth
+- 🔐 **User Authentication** - Email/password, Apple Sign-In, and Google Sign-In
+- 🍎 **OAuth Integration** - Sign in with Apple and Google for seamless authentication
 - 👤 **Creator Profiles** - Customizable profiles with bio, avatar, and cover images
 - 💳 **Subscription System** - Monthly subscriptions with Stripe payments
 - 📹 **Content Uploads** - Support for video, image, and text content (up to 2GB)

@@ -4,7 +4,8 @@ A premium content subscription platform similar to OnlyFans, built with Astro, S
 
 ## Features
 
-✅ User authentication (signup, login, sessions)
+✅ User authentication (email/password, Apple Sign-In, Google Sign-In)
+✅ OAuth integration with Apple and Google
 ✅ Creator profiles with customizable bios and avatars
 ✅ Subscription-based content access
 ✅ Payment processing with Stripe
@@ -47,14 +48,72 @@ npm install
 3. Go to Project Settings > Database and get your service role key
 4. Run the SQL schema from `supabase-schema.sql` in the Supabase SQL Editor
 
-### 3. Set Up Stripe
+### 3. Configure OAuth Providers (Apple & Google Sign-In)
+
+#### Apple Sign-In Setup
+
+1. **Apple Developer Account**:
+   - Go to [Apple Developer Console](https://developer.apple.com)
+   - Navigate to Certificates, Identifiers & Profiles
+   - Create a new App ID or use existing one
+   - Enable "Sign in with Apple" capability
+
+2. **Create Service ID**:
+   - Go to Identifiers and create a new Service ID
+   - Enable "Sign in with Apple"
+   - Configure domains and return URLs:
+     - Domains: `your-project-ref.supabase.co`
+     - Return URLs: `https://your-project-ref.supabase.co/auth/v1/callback`
+
+3. **Create Key**:
+   - Go to Keys and create a new key
+   - Enable "Sign in with Apple"
+   - Download the key file (.p8)
+   - Note the Key ID
+
+4. **Configure in Supabase**:
+   - Go to Authentication > Providers in Supabase Dashboard
+   - Enable Apple provider
+   - Enter:
+     - Services ID (Identifier from step 2)
+     - Team ID (from Apple Developer Account)
+     - Key ID (from step 3)
+     - Private Key (contents of .p8 file)
+
+#### Google Sign-In Setup
+
+1. **Google Cloud Console**:
+   - Go to [Google Cloud Console](https://console.cloud.google.com)
+   - Create a new project or select existing one
+   - Enable Google+ API
+
+2. **Create OAuth Credentials**:
+   - Go to Credentials > Create Credentials > OAuth client ID
+   - Application type: Web application
+   - Authorized redirect URIs:
+     - `https://your-project-ref.supabase.co/auth/v1/callback`
+     - `http://localhost:4321/auth/callback` (for development)
+
+3. **Configure in Supabase**:
+   - Go to Authentication > Providers in Supabase Dashboard
+   - Enable Google provider
+   - Enter:
+     - Client ID (from Google Console)
+     - Client Secret (from Google Console)
+
+4. **Update OAuth Consent Screen**:
+   - Configure app name, logo, and support email
+   - Add scopes: email, profile
+   - Add test users for development
+
+### 4. Set Up Stripe
 
 1. Create a Stripe account at [stripe.com](https://stripe.com)
 2. Get your API keys from the Stripe Dashboard
 3. Set up a webhook endpoint pointing to `https://your-domain.com/api/stripe/webhook`
 4. Get your webhook signing secret
 
-### 4. Configure Environment Variables
+### 5. Configure Environment Variables
 
 Create a `.env` file in the project root:
 
@@ -76,7 +135,7 @@ BLOB_READ_WRITE_TOKEN=your_vercel_blob_token
 PUBLIC_APP_URL=http://localhost:4321
 ```
 
-### 5. Run Database Migrations
+### 6. Run Database Migrations
 
 Execute the SQL schema in your Supabase project:
 
@@ -96,7 +155,7 @@ This will create all necessary tables:
 - `comments` - Post comments
 - `earnings` - Creator earnings
 
-### 6. Start Development Server
+### 7. Start Development Server
 
 ```bash
 npm run dev
