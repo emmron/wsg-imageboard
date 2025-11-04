@@ -1,0 +1,254 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Sign Up - Premium Content Platform">
+  <main class="auth-container">
+    <div class="auth-card">
+      <h1>Create Account</h1>
+      <p class="subtitle">Join to discover exclusive content from creators</p>
+
+      <form id="signupForm" class="auth-form">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input
+            type="text"
+            id="username"
+            name="username"
+            placeholder="Choose a unique username"
+            pattern="[a-zA-Z0-9_]+"
+            title="Only letters, numbers, and underscores"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="displayName">Display Name</label>
+          <input
+            type="text"
+            id="displayName"
+            name="displayName"
+            placeholder="Your public name"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            placeholder="Enter your email"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            placeholder="Create a strong password"
+            minlength="6"
+            required
+          />
+        </div>
+
+        <div class="form-group checkbox-group">
+          <label>
+            <input type="checkbox" id="isCreator" name="isCreator" />
+            <span>I want to create and monetize content</span>
+          </label>
+        </div>
+
+        <div id="errorMessage" class="error-message"></div>
+
+        <button type="submit" class="btn-primary" id="submitBtn">
+          Create Account
+        </button>
+      </form>
+
+      <div class="auth-footer">
+        <p>Already have an account? <a href="/login">Sign in</a></p>
+      </div>
+    </div>
+  </main>
+</Layout>
+
+<script>
+  import { signUp } from '../lib/auth-store';
+
+  const form = document.getElementById('signupForm') as HTMLFormElement;
+  const errorMessage = document.getElementById('errorMessage') as HTMLDivElement;
+  const submitBtn = document.getElementById('submitBtn') as HTMLButtonElement;
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const formData = new FormData(form);
+    const username = formData.get('username') as string;
+    const displayName = formData.get('displayName') as string;
+    const email = formData.get('email') as string;
+    const password = formData.get('password') as string;
+
+    errorMessage.textContent = '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Creating account...';
+
+    try {
+      await signUp(email, password, username, displayName);
+      // Show success message
+      errorMessage.style.color = '#48bb78';
+      errorMessage.textContent = 'Account created! Check your email to verify.';
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 2000);
+    } catch (error: any) {
+      errorMessage.style.color = '#e53e3e';
+      errorMessage.textContent = error.message || 'Failed to create account';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Create Account';
+    }
+  });
+</script>
+
+<style>
+  .auth-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+
+  .auth-card {
+    background: white;
+    border-radius: 1rem;
+    padding: 3rem;
+    max-width: 450px;
+    width: 100%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  }
+
+  h1 {
+    margin: 0 0 0.5rem 0;
+    font-size: 2rem;
+    color: #1a1a1a;
+    text-align: center;
+  }
+
+  .subtitle {
+    margin: 0 0 2rem 0;
+    color: #666;
+    text-align: center;
+  }
+
+  .auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .form-group label {
+    font-weight: 600;
+    color: #333;
+    font-size: 0.9rem;
+  }
+
+  .form-group input[type="text"],
+  .form-group input[type="email"],
+  .form-group input[type="password"] {
+    padding: 0.75rem 1rem;
+    border: 2px solid #e0e0e0;
+    border-radius: 0.5rem;
+    font-size: 1rem;
+    transition: border-color 0.2s;
+  }
+
+  .form-group input:focus {
+    outline: none;
+    border-color: #667eea;
+  }
+
+  .checkbox-group label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: normal;
+    cursor: pointer;
+  }
+
+  .checkbox-group input[type="checkbox"] {
+    width: 1.25rem;
+    height: 1.25rem;
+    cursor: pointer;
+  }
+
+  .error-message {
+    color: #e53e3e;
+    font-size: 0.9rem;
+    min-height: 1.5rem;
+    text-align: center;
+  }
+
+  .btn-primary {
+    padding: 1rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 0.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .auth-footer {
+    margin-top: 2rem;
+    text-align: center;
+  }
+
+  .auth-footer p {
+    margin: 0;
+    color: #666;
+  }
+
+  .auth-footer a {
+    color: #667eea;
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  .auth-footer a:hover {
+    text-decoration: underline;
+  }
+
+  @media (max-width: 640px) {
+    .auth-card {
+      padding: 2rem;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+    }
+  }
+</style>

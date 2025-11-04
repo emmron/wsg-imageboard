@@ -1,0 +1,531 @@
+---
+import Layout from '../../layouts/Layout.astro';
+
+// This will be populated with real data once Supabase is configured
+const { username } = Astro.params;
+---
+
+<Layout title={`@${username} - Profile`}>
+  <main class="profile-container">
+    <div class="profile-header" id="profileHeader">
+      <div class="cover-image">
+        <div class="cover-placeholder"></div>
+      </div>
+      <div class="profile-info">
+        <div class="avatar">
+          <div class="avatar-placeholder"></div>
+        </div>
+        <div class="profile-details">
+          <h1 class="display-name">Loading...</h1>
+          <p class="username">@{username}</p>
+          <p class="bio">Loading profile...</p>
+          <div class="stats">
+            <div class="stat">
+              <span class="stat-value">0</span>
+              <span class="stat-label">Posts</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">0</span>
+              <span class="stat-label">Subscribers</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">0</span>
+              <span class="stat-label">Followers</span>
+            </div>
+          </div>
+        </div>
+        <div class="profile-actions">
+          <button id="subscribeBtn" class="btn-subscribe">Subscribe</button>
+          <button id="followBtn" class="btn-follow">Follow</button>
+          <button id="messageBtn" class="btn-message">Message</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="profile-content">
+      <div class="tabs">
+        <button class="tab active" data-tab="posts">Posts</button>
+        <button class="tab" data-tab="media">Media</button>
+        <button class="tab" data-tab="about">About</button>
+      </div>
+
+      <div class="tab-content">
+        <div id="posts-tab" class="tab-pane active">
+          <div id="postsGrid" class="posts-grid">
+            <p class="loading">Loading posts...</p>
+          </div>
+        </div>
+
+        <div id="media-tab" class="tab-pane">
+          <div class="media-grid">
+            <p class="loading">Loading media...</p>
+          </div>
+        </div>
+
+        <div id="about-tab" class="tab-pane">
+          <div class="about-content">
+            <h2>About</h2>
+            <p id="aboutBio">Loading...</p>
+            <div class="subscription-info">
+              <h3>Subscription</h3>
+              <p class="price">$<span id="subPrice">0.00</span>/month</p>
+              <p>Get exclusive access to this creator's content</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</Layout>
+
+<script>
+  import { supabase, type Profile, type Post } from '../../lib/supabase';
+  import { currentUser, isAuthenticated } from '../../lib/auth-store';
+
+  const username = window.location.pathname.split('/')[2];
+  let profile: Profile | null = null;
+  let currentUserId: string | null = null;
+
+  // Get current user
+  currentUser.subscribe(user => {
+    currentUserId = user?.id || null;
+  });
+
+  async function loadProfile() {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('username', username)
+        .single();
+
+      if (error) throw error;
+      profile = data;
+
+      // Update UI
+      document.querySelector('.display-name')!.textContent = data.display_name || data.username;
+      document.querySelector('.bio')!.textContent = data.bio || 'No bio yet';
+      document.getElementById('aboutBio')!.textContent = data.bio || 'No bio available';
+      document.getElementById('subPrice')!.textContent = data.subscription_price.toFixed(2);
+
+      // Update avatar and cover
+      if (data.avatar_url) {
+        const avatar = document.querySelector('.avatar-placeholder') as HTMLDivElement;
+        avatar.style.backgroundImage = `url(${data.avatar_url})`;
+      }
+
+      if (data.cover_url) {
+        const cover = document.querySelector('.cover-placeholder') as HTMLDivElement;
+        cover.style.backgroundImage = `url(${data.cover_url})`;
+      }
+
+      // Load posts
+      await loadPosts();
+
+      // Update buttons visibility
+      updateButtons();
+
+    } catch (error) {
+      console.error('Error loading profile:', error);
+      document.querySelector('.display-name')!.textContent = 'Profile not found';
+    }
+  }
+
+  async function loadPosts() {
+    if (!profile) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('posts')
+        .select('*')
+        .eq('creator_id', profile.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const postsGrid = document.getElementById('postsGrid')!;
+
+      if (!data || data.length === 0) {
+        postsGrid.innerHTML = '<p class="empty">No posts yet</p>';
+        return;
+      }
+
+      postsGrid.innerHTML = data.map((post: Post) => `
+        <div class="post-card" data-post-id="${post.id}">
+          <div class="post-thumbnail">
+            ${post.thumbnail_url
+              ? `<img src="${post.thumbnail_url}" alt="${post.title}">`
+              : '<div class="thumbnail-placeholder"></div>'}
+            ${!post.is_free ? '<div class="locked-badge">🔒 Subscribers Only</div>' : ''}
+          </div>
+          <div class="post-info">
+            <h3>${post.title}</h3>
+            <p class="post-stats">
+              <span>👁️ ${post.view_count}</span>
+              <span>❤️ ${post.like_count}</span>
+            </p>
+          </div>
+        </div>
+      `).join('');
+
+      // Update stats
+      updateStats(data.length);
+
+    } catch (error) {
+      console.error('Error loading posts:', error);
+    }
+  }
+
+  function updateStats(postCount: number) {
+    document.querySelector('.stats .stat:first-child .stat-value')!.textContent = postCount.toString();
+  }
+
+  function updateButtons() {
+    const subscribeBtn = document.getElementById('subscribeBtn') as HTMLButtonElement;
+    const followBtn = document.getElementById('followBtn') as HTMLButtonElement;
+    const messageBtn = document.getElementById('messageBtn') as HTMLButtonElement;
+
+    if (!currentUserId || currentUserId === profile?.id) {
+      // Hide buttons if viewing own profile
+      if (currentUserId === profile?.id) {
+        subscribeBtn.style.display = 'none';
+        followBtn.textContent = 'Edit Profile';
+        followBtn.onclick = () => window.location.href = '/settings';
+        messageBtn.style.display = 'none';
+      } else {
+        // Not logged in
+        subscribeBtn.onclick = () => window.location.href = '/login';
+        followBtn.onclick = () => window.location.href = '/login';
+        messageBtn.onclick = () => window.location.href = '/login';
+      }
+    }
+  }
+
+  // Tab switching
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const tabName = tab.getAttribute('data-tab');
+
+      // Update active tab
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+
+      // Update active content
+      document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+      document.getElementById(`${tabName}-tab`)?.classList.add('active');
+    });
+  });
+
+  // Initialize
+  loadProfile();
+</script>
+
+<style>
+  .profile-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0;
+  }
+
+  .profile-header {
+    background: white;
+    border-radius: 0 0 1rem 1rem;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .cover-image {
+    height: 300px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+
+  .cover-placeholder {
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-position: center;
+  }
+
+  .profile-info {
+    padding: 0 2rem 2rem 2rem;
+    position: relative;
+  }
+
+  .avatar {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    border: 5px solid white;
+    margin-top: -75px;
+    overflow: hidden;
+    background: #f0f0f0;
+  }
+
+  .avatar-placeholder {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background-size: cover;
+    background-position: center;
+  }
+
+  .profile-details {
+    margin-top: 1rem;
+  }
+
+  .display-name {
+    font-size: 2rem;
+    margin: 0 0 0.25rem 0;
+    color: #1a1a1a;
+  }
+
+  .username {
+    color: #666;
+    margin: 0 0 1rem 0;
+    font-size: 1.1rem;
+  }
+
+  .bio {
+    color: #333;
+    margin: 0 0 1.5rem 0;
+    line-height: 1.6;
+  }
+
+  .stats {
+    display: flex;
+    gap: 2rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1a1a1a;
+  }
+
+  .stat-label {
+    color: #666;
+    font-size: 0.9rem;
+  }
+
+  .profile-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+
+  .btn-subscribe,
+  .btn-follow,
+  .btn-message {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-subscribe {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+  }
+
+  .btn-follow {
+    background: white;
+    border: 2px solid #667eea;
+    color: #667eea;
+  }
+
+  .btn-message {
+    background: #f0f0f0;
+    color: #333;
+  }
+
+  .btn-subscribe:hover,
+  .btn-follow:hover,
+  .btn-message:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  .profile-content {
+    margin-top: 2rem;
+    background: white;
+    border-radius: 1rem;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .tabs {
+    display: flex;
+    border-bottom: 2px solid #f0f0f0;
+  }
+
+  .tab {
+    padding: 1rem 2rem;
+    background: none;
+    border: none;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #666;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s;
+  }
+
+  .tab:hover {
+    color: #667eea;
+  }
+
+  .tab.active {
+    color: #667eea;
+    border-bottom-color: #667eea;
+  }
+
+  .tab-pane {
+    display: none;
+    padding: 2rem;
+  }
+
+  .tab-pane.active {
+    display: block;
+  }
+
+  .posts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .post-card {
+    border-radius: 0.75rem;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s;
+    cursor: pointer;
+  }
+
+  .post-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  }
+
+  .post-thumbnail {
+    width: 100%;
+    height: 200px;
+    background: #f0f0f0;
+    position: relative;
+  }
+
+  .post-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .thumbnail-placeholder {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+
+  .locked-badge {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  .post-info {
+    padding: 1rem;
+  }
+
+  .post-info h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.1rem;
+  }
+
+  .post-stats {
+    display: flex;
+    gap: 1rem;
+    color: #666;
+    font-size: 0.9rem;
+  }
+
+  .loading,
+  .empty {
+    text-align: center;
+    color: #666;
+    padding: 3rem;
+  }
+
+  .about-content h2 {
+    margin-top: 0;
+  }
+
+  .subscription-info {
+    margin-top: 2rem;
+    padding: 1.5rem;
+    background: #f8f9fa;
+    border-radius: 0.75rem;
+  }
+
+  .subscription-info h3 {
+    margin-top: 0;
+  }
+
+  .price {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #667eea;
+    margin: 0.5rem 0 1rem 0;
+  }
+
+  @media (max-width: 768px) {
+    .cover-image {
+      height: 200px;
+    }
+
+    .avatar {
+      width: 100px;
+      height: 100px;
+      margin-top: -50px;
+    }
+
+    .profile-info {
+      padding: 0 1rem 1rem 1rem;
+    }
+
+    .display-name {
+      font-size: 1.5rem;
+    }
+
+    .stats {
+      gap: 1rem;
+    }
+
+    .profile-actions {
+      flex-direction: column;
+    }
+
+    .posts-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .tab {
+      padding: 0.75rem 1rem;
+      font-size: 0.9rem;
+    }
+  }
+</style>

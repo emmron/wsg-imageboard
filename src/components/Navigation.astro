@@ -5,22 +5,23 @@ import UploadModal from './UploadModal.astro';
 <header class="header">
   <div class="header-inner">
     <div class="logo-section">
-      <a href="/" class="logo">Vimeo</a>
+      <a href="/" class="logo">FanConnect</a>
     </div>
-    
+
     <nav class="main-nav">
       <a href="/" class="nav-link">Home</a>
       <a href="/explore" class="nav-link">Explore</a>
-      <a href="/channels" class="nav-link">Channels</a>
+      <a href="/feed" class="nav-link" id="feed-link">Feed</a>
+      <a href="/dashboard" class="nav-link" id="dashboard-link">Dashboard</a>
     </nav>
-    
+
     <div class="search-section">
       <div class="search-box">
-        <input 
-          type="text" 
-          placeholder="Search videos, people, or tags" 
+        <input
+          type="text"
+          placeholder="Search creators, content, or tags"
           id="search-input"
-          aria-label="Search videos, people, or tags"
+          aria-label="Search creators, content, or tags"
         />
         <button class="search-btn" aria-label="Search">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -29,16 +30,35 @@ import UploadModal from './UploadModal.astro';
         </button>
       </div>
     </div>
-    
+
     <div class="nav-actions">
-      <button 
-        class="upload-btn" 
+      <button
+        class="upload-btn"
         id="upload-btn"
-        aria-label="Upload new video"
+        aria-label="Upload new content"
+        style="display: none;"
       >
         <span class="upload-icon">+</span>
         <span>Upload</span>
       </button>
+
+      <div id="user-menu" class="user-menu" style="display: none;">
+        <button class="user-avatar" id="user-avatar-btn">
+          <div class="avatar-placeholder"></div>
+        </button>
+        <div class="dropdown-menu" id="dropdown-menu">
+          <a href="#" class="dropdown-item" id="profile-link">My Profile</a>
+          <a href="/settings" class="dropdown-item">Settings</a>
+          <a href="/dashboard" class="dropdown-item">Dashboard</a>
+          <hr class="dropdown-divider" />
+          <button class="dropdown-item" id="logout-btn">Logout</button>
+        </div>
+      </div>
+
+      <div id="auth-buttons" class="auth-buttons">
+        <a href="/login" class="btn-login">Login</a>
+        <a href="/signup" class="btn-signup">Sign Up</a>
+      </div>
     </div>
   </div>
 </header>
@@ -47,37 +67,69 @@ import UploadModal from './UploadModal.astro';
 
 <script>
   import { searchQuery, showUploadModal } from '../lib/stores.ts';
+  import { currentUser, currentProfile, isAuthenticated, signOut } from '../lib/auth-store';
 
   // Search functionality
   const searchInput = document.getElementById('search-input') as HTMLInputElement;
-  const clearBtn = document.getElementById('clear-search') as HTMLButtonElement;
-  
-  if (searchInput && clearBtn) {
+
+  if (searchInput) {
     searchInput.addEventListener('input', () => {
       const value = searchInput.value;
       searchQuery.set(value);
-      clearBtn.style.display = value ? 'block' : 'none';
-    });
-
-    clearBtn.addEventListener('click', () => {
-      searchInput.value = '';
-      searchQuery.set('');
-      clearBtn.style.display = 'none';
     });
 
     // Subscribe to searchQuery changes to update input
     searchQuery.subscribe((value) => {
       if (searchInput.value !== value) {
         searchInput.value = value;
-        clearBtn.style.display = value ? 'block' : 'none';
       }
     });
   }
 
-  // Upload modal functionality
+  // Auth state management
   const uploadBtn = document.getElementById('upload-btn') as HTMLButtonElement;
+  const userMenu = document.getElementById('user-menu') as HTMLDivElement;
+  const authButtons = document.getElementById('auth-buttons') as HTMLDivElement;
+  const feedLink = document.getElementById('feed-link') as HTMLAnchorElement;
+  const dashboardLink = document.getElementById('dashboard-link') as HTMLAnchorElement;
+  const profileLink = document.getElementById('profile-link') as HTMLAnchorElement;
+
+  // Update UI based on auth state
+  isAuthenticated.subscribe((authenticated) => {
+    if (authenticated) {
+      uploadBtn.style.display = 'flex';
+      userMenu.style.display = 'block';
+      authButtons.style.display = 'none';
+      feedLink.style.display = 'block';
+      dashboardLink.style.display = 'block';
+    } else {
+      uploadBtn.style.display = 'none';
+      userMenu.style.display = 'none';
+      authButtons.style.display = 'flex';
+      feedLink.style.display = 'none';
+      dashboardLink.style.display = 'none';
+    }
+  });
+
+  // Update user avatar and profile link
+  currentProfile.subscribe((profile) => {
+    if (profile) {
+      const avatarPlaceholder = document.querySelector('.user-avatar .avatar-placeholder') as HTMLDivElement;
+      if (profile.avatar_url && avatarPlaceholder) {
+        avatarPlaceholder.style.backgroundImage = `url(${profile.avatar_url})`;
+        avatarPlaceholder.style.backgroundSize = 'cover';
+        avatarPlaceholder.style.backgroundPosition = 'center';
+      }
+
+      if (profileLink) {
+        profileLink.href = `/profile/${profile.username}`;
+      }
+    }
+  });
+
+  // Upload modal functionality
   const uploadIcon = uploadBtn?.querySelector('.upload-icon') as HTMLElement;
-  
+
   if (uploadBtn && uploadIcon) {
     uploadBtn.addEventListener('click', () => {
       showUploadModal.set(!showUploadModal.get());
@@ -87,12 +139,42 @@ import UploadModal from './UploadModal.astro';
     showUploadModal.subscribe((show) => {
       uploadBtn.setAttribute('aria-expanded', show.toString());
       uploadIcon.style.transform = show ? 'rotate(45deg)' : 'rotate(0deg)';
-      
+
       // Handle body scroll
       if (show) {
         document.body.style.overflow = 'hidden';
       } else {
         document.body.style.overflow = '';
+      }
+    });
+  }
+
+  // User menu dropdown
+  const userAvatarBtn = document.getElementById('user-avatar-btn') as HTMLButtonElement;
+  const dropdownMenu = document.getElementById('dropdown-menu') as HTMLDivElement;
+
+  if (userAvatarBtn && dropdownMenu) {
+    userAvatarBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dropdownMenu.classList.toggle('show');
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', () => {
+      dropdownMenu.classList.remove('show');
+    });
+  }
+
+  // Logout functionality
+  const logoutBtn = document.getElementById('logout-btn') as HTMLButtonElement;
+
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async () => {
+      try {
+        await signOut();
+        window.location.href = '/';
+      } catch (error) {
+        console.error('Error logging out:', error);
       }
     });
   }
@@ -235,10 +317,13 @@ import UploadModal from './UploadModal.astro';
 
   .nav-actions {
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
   }
 
   .upload-btn {
-    background: #1ab7ea;
+    background: #667eea;
     color: white;
     border: none;
     padding: 8px 16px;
@@ -254,7 +339,7 @@ import UploadModal from './UploadModal.astro';
   }
 
   .upload-btn:hover {
-    background: #158bb8;
+    background: #764ba2;
   }
 
   .upload-icon {
@@ -266,6 +351,114 @@ import UploadModal from './UploadModal.astro';
 
   .upload-btn[aria-expanded="true"] .upload-icon {
     transform: rotate(45deg);
+  }
+
+  .auth-buttons {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .btn-login,
+  .btn-signup {
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s;
+  }
+
+  .btn-login {
+    color: #667eea;
+    background: transparent;
+  }
+
+  .btn-login:hover {
+    background: #f0f0f0;
+  }
+
+  .btn-signup {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+  }
+
+  .btn-signup:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  }
+
+  .user-menu {
+    position: relative;
+  }
+
+  .user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    overflow: hidden;
+    background: #f0f0f0;
+    transition: transform 0.2s;
+  }
+
+  .user-avatar:hover {
+    transform: scale(1.05);
+  }
+
+  .user-avatar .avatar-placeholder {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+
+  .dropdown-menu {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    background: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 200px;
+    padding: 0.5rem 0;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.2s;
+    z-index: 1000;
+  }
+
+  .dropdown-menu.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+
+  .dropdown-item {
+    display: block;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    color: #333;
+    text-decoration: none;
+    background: none;
+    border: none;
+    text-align: left;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s;
+    font-family: inherit;
+  }
+
+  .dropdown-item:hover {
+    background: #f0f0f0;
+  }
+
+  .dropdown-divider {
+    margin: 0.5rem 0;
+    border: none;
+    border-top: 1px solid #e0e0e0;
   }
 
   /* Responsive Design */
