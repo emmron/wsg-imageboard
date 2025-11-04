@@ -1,0 +1,422 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Your Feed - Premium Content">
+  <main class="feed-container">
+    <div class="feed-header">
+      <h1>Your Feed</h1>
+      <p>Content from creators you subscribe to</p>
+    </div>
+
+    <div class="feed-filters">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="video">Videos</button>
+      <button class="filter-btn" data-filter="image">Photos</button>
+      <button class="filter-btn" data-filter="text">Posts</button>
+    </div>
+
+    <div id="feedContent" class="feed-content">
+      <p class="loading">Loading your feed...</p>
+    </div>
+  </main>
+</Layout>
+
+<script>
+  import { supabase, type Post, type Profile } from '../lib/supabase';
+  import { currentUser } from '../lib/auth-store';
+
+  let userId: string | null = null;
+
+  currentUser.subscribe(user => {
+    userId = user?.id || null;
+    if (userId) {
+      loadFeed();
+    } else {
+      window.location.href = '/login';
+    }
+  });
+
+  async function loadFeed() {
+    if (!userId) return;
+
+    try {
+      // Get subscribed creators
+      const { data: subscriptions, error: subError } = await supabase
+        .from('subscriptions')
+        .select('creator_id')
+        .eq('subscriber_id', userId)
+        .eq('status', 'active');
+
+      if (subError) throw subError;
+
+      if (!subscriptions || subscriptions.length === 0) {
+        const feedContent = document.getElementById('feedContent')!;
+        feedContent.innerHTML = `
+          <div class="empty-state">
+            <h2>Your feed is empty</h2>
+            <p>Subscribe to creators to see their content here</p>
+            <a href="/explore" class="btn-primary">Discover Creators</a>
+          </div>
+        `;
+        return;
+      }
+
+      const creatorIds = subscriptions.map(s => s.creator_id);
+
+      // Get posts from subscribed creators
+      const { data: posts, error: postsError } = await supabase
+        .from('posts')
+        .select(`
+          *,
+          profiles!posts_creator_id_fkey (
+            username,
+            display_name,
+            avatar_url
+          )
+        `)
+        .in('creator_id', creatorIds)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (postsError) throw postsError;
+
+      renderPosts(posts);
+
+    } catch (error) {
+      console.error('Error loading feed:', error);
+      const feedContent = document.getElementById('feedContent')!;
+      feedContent.innerHTML = '<p class="error">Failed to load feed</p>';
+    }
+  }
+
+  function renderPosts(posts: any[]) {
+    const feedContent = document.getElementById('feedContent')!;
+
+    if (!posts || posts.length === 0) {
+      feedContent.innerHTML = `
+        <div class="empty-state">
+          <h2>No posts yet</h2>
+          <p>Your subscribed creators haven't posted anything yet</p>
+        </div>
+      `;
+      return;
+    }
+
+    feedContent.innerHTML = posts.map(post => {
+      const creator = post.profiles;
+      return `
+        <article class="feed-post" data-post-id="${post.id}">
+          <div class="post-header">
+            <div class="creator-info">
+              <div class="creator-avatar">
+                ${creator.avatar_url
+                  ? `<img src="${creator.avatar_url}" alt="${creator.username}">`
+                  : '<div class="avatar-placeholder"></div>'}
+              </div>
+              <div>
+                <a href="/profile/${creator.username}" class="creator-name">${creator.display_name || creator.username}</a>
+                <p class="post-time">${formatTime(post.created_at)}</p>
+              </div>
+            </div>
+            <button class="btn-menu">⋮</button>
+          </div>
+
+          <div class="post-content">
+            <h2>${post.title}</h2>
+            ${post.description ? `<p>${post.description}</p>` : ''}
+
+            ${post.content_type === 'video' && post.media_url
+              ? `<video controls src="${post.media_url}" poster="${post.thumbnail_url || ''}"></video>`
+              : post.content_type === 'image' && post.media_url
+              ? `<img src="${post.media_url}" alt="${post.title}">`
+              : ''}
+
+            ${post.tags && post.tags.length > 0
+              ? `<div class="post-tags">${post.tags.map((tag: string) => `<span class="tag">#${tag}</span>`).join('')}</div>`
+              : ''}
+          </div>
+
+          <div class="post-actions">
+            <button class="action-btn" data-action="like">
+              ❤️ <span>${post.like_count}</span>
+            </button>
+            <button class="action-btn" data-action="comment">
+              💬 <span>0</span>
+            </button>
+            <button class="action-btn" data-action="share">
+              🔗 Share
+            </button>
+          </div>
+        </article>
+      `;
+    }).join('');
+  }
+
+  function formatTime(timestamp: string): string {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return date.toLocaleDateString();
+  }
+
+  // Filter buttons
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      const filter = btn.getAttribute('data-filter');
+      // TODO: Implement filtering
+    });
+  });
+</script>
+
+<style>
+  .feed-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+  }
+
+  .feed-header {
+    margin-bottom: 2rem;
+  }
+
+  .feed-header h1 {
+    margin: 0 0 0.5rem 0;
+    font-size: 2rem;
+  }
+
+  .feed-header p {
+    margin: 0;
+    color: #666;
+  }
+
+  .feed-filters {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    border-bottom: 2px solid #f0f0f0;
+  }
+
+  .filter-btn {
+    padding: 0.75rem 1.5rem;
+    background: none;
+    border: none;
+    font-weight: 600;
+    color: #666;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s;
+  }
+
+  .filter-btn:hover {
+    color: #667eea;
+  }
+
+  .filter-btn.active {
+    color: #667eea;
+    border-bottom-color: #667eea;
+  }
+
+  .feed-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .feed-post {
+    background: white;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .post-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+
+  .creator-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .creator-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: #f0f0f0;
+  }
+
+  .creator-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .avatar-placeholder {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+
+  .creator-name {
+    font-weight: 700;
+    color: #1a1a1a;
+    text-decoration: none;
+  }
+
+  .creator-name:hover {
+    color: #667eea;
+  }
+
+  .post-time {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #999;
+  }
+
+  .btn-menu {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #666;
+    padding: 0.5rem;
+  }
+
+  .post-content h2 {
+    margin: 0 0 1rem 0;
+    font-size: 1.5rem;
+  }
+
+  .post-content p {
+    color: #333;
+    line-height: 1.6;
+    margin-bottom: 1rem;
+  }
+
+  .post-content video,
+  .post-content img {
+    width: 100%;
+    border-radius: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .post-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+
+  .tag {
+    background: #f0f0f0;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.9rem;
+    color: #667eea;
+  }
+
+  .post-actions {
+    display: flex;
+    gap: 2rem;
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #f0f0f0;
+  }
+
+  .action-btn {
+    background: none;
+    border: none;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1rem;
+    cursor: pointer;
+    color: #666;
+    transition: color 0.2s;
+  }
+
+  .action-btn:hover {
+    color: #667eea;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+  }
+
+  .empty-state h2 {
+    margin: 0 0 1rem 0;
+    color: #333;
+  }
+
+  .empty-state p {
+    margin: 0 0 2rem 0;
+    color: #666;
+  }
+
+  .btn-primary {
+    display: inline-block;
+    padding: 1rem 2rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    text-decoration: none;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    transition: transform 0.2s;
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-2px);
+  }
+
+  .loading,
+  .error {
+    text-align: center;
+    color: #666;
+    padding: 3rem;
+  }
+
+  .error {
+    color: #e53e3e;
+  }
+
+  @media (max-width: 768px) {
+    .feed-container {
+      padding: 1rem 0.5rem;
+    }
+
+    .feed-header h1 {
+      font-size: 1.5rem;
+    }
+
+    .filter-btn {
+      padding: 0.5rem 1rem;
+      font-size: 0.9rem;
+    }
+
+    .feed-post {
+      padding: 1rem;
+    }
+
+    .post-actions {
+      gap: 1rem;
+    }
+  }
+</style>

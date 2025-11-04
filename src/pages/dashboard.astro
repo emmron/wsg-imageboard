@@ -1,0 +1,617 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Creator Dashboard">
+  <main class="dashboard-container">
+    <div class="dashboard-header">
+      <h1>Creator Dashboard</h1>
+      <a href="/upload" class="btn-upload">+ Upload Content</a>
+    </div>
+
+    <div class="dashboard-stats">
+      <div class="stat-card">
+        <div class="stat-icon">💰</div>
+        <div class="stat-info">
+          <p class="stat-label">Total Earnings</p>
+          <p class="stat-value" id="totalEarnings">$0.00</p>
+          <p class="stat-change">+$0 this month</p>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon">👥</div>
+        <div class="stat-info">
+          <p class="stat-label">Subscribers</p>
+          <p class="stat-value" id="subscriberCount">0</p>
+          <p class="stat-change">+0 this month</p>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon">📹</div>
+        <div class="stat-info">
+          <p class="stat-label">Total Posts</p>
+          <p class="stat-value" id="postCount">0</p>
+          <p class="stat-change">+0 this month</p>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon">👁️</div>
+        <div class="stat-info">
+          <p class="stat-label">Total Views</p>
+          <p class="stat-value" id="viewCount">0</p>
+          <p class="stat-change">+0 this month</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="dashboard-content">
+      <div class="content-section">
+        <div class="section-header">
+          <h2>Recent Posts</h2>
+          <a href="/upload" class="btn-secondary">Upload New</a>
+        </div>
+        <div id="recentPosts" class="posts-list">
+          <p class="loading">Loading posts...</p>
+        </div>
+      </div>
+
+      <div class="content-section">
+        <div class="section-header">
+          <h2>Recent Subscribers</h2>
+          <a href="/subscribers" class="btn-secondary">View All</a>
+        </div>
+        <div id="recentSubscribers" class="subscribers-list">
+          <p class="loading">Loading subscribers...</p>
+        </div>
+      </div>
+
+      <div class="content-section">
+        <div class="section-header">
+          <h2>Earnings Breakdown</h2>
+          <select id="earningsPeriod" class="period-select">
+            <option value="week">This Week</option>
+            <option value="month" selected>This Month</option>
+            <option value="year">This Year</option>
+            <option value="all">All Time</option>
+          </select>
+        </div>
+        <div id="earningsChart" class="earnings-chart">
+          <div class="chart-placeholder">
+            <p>No earnings data yet</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</Layout>
+
+<script>
+  import { supabase } from '../lib/supabase';
+  import { currentUser } from '../lib/auth-store';
+
+  let userId: string | null = null;
+
+  currentUser.subscribe(user => {
+    userId = user?.id || null;
+    if (userId) {
+      loadDashboard();
+    } else {
+      window.location.href = '/login';
+    }
+  });
+
+  async function loadDashboard() {
+    if (!userId) return;
+
+    try {
+      await Promise.all([
+        loadStats(),
+        loadRecentPosts(),
+        loadRecentSubscribers(),
+        loadEarnings()
+      ]);
+    } catch (error) {
+      console.error('Error loading dashboard:', error);
+    }
+  }
+
+  async function loadStats() {
+    if (!userId) return;
+
+    // Get total earnings
+    const { data: earnings } = await supabase
+      .from('earnings')
+      .select('amount')
+      .eq('creator_id', userId);
+
+    const totalEarnings = earnings?.reduce((sum, e) => sum + Number(e.amount), 0) || 0;
+    document.getElementById('totalEarnings')!.textContent = `$${totalEarnings.toFixed(2)}`;
+
+    // Get subscriber count
+    const { count: subscriberCount } = await supabase
+      .from('subscriptions')
+      .select('*', { count: 'exact', head: true })
+      .eq('creator_id', userId)
+      .eq('status', 'active');
+
+    document.getElementById('subscriberCount')!.textContent = subscriberCount?.toString() || '0';
+
+    // Get post count
+    const { count: postCount } = await supabase
+      .from('posts')
+      .select('*', { count: 'exact', head: true })
+      .eq('creator_id', userId);
+
+    document.getElementById('postCount')!.textContent = postCount?.toString() || '0';
+
+    // Get total views
+    const { data: posts } = await supabase
+      .from('posts')
+      .select('view_count')
+      .eq('creator_id', userId);
+
+    const totalViews = posts?.reduce((sum, p) => sum + p.view_count, 0) || 0;
+    document.getElementById('viewCount')!.textContent = totalViews.toLocaleString();
+  }
+
+  async function loadRecentPosts() {
+    if (!userId) return;
+
+    const { data, error } = await supabase
+      .from('posts')
+      .select('*')
+      .eq('creator_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (error) {
+      console.error('Error loading posts:', error);
+      return;
+    }
+
+    const container = document.getElementById('recentPosts')!;
+
+    if (!data || data.length === 0) {
+      container.innerHTML = '<p class="empty">No posts yet. Upload your first content!</p>';
+      return;
+    }
+
+    container.innerHTML = data.map(post => `
+      <div class="post-item">
+        <div class="post-thumbnail">
+          ${post.thumbnail_url
+            ? `<img src="${post.thumbnail_url}" alt="${post.title}">`
+            : '<div class="thumbnail-placeholder"></div>'}
+        </div>
+        <div class="post-details">
+          <h3>${post.title}</h3>
+          <p class="post-meta">
+            ${post.is_free ? '🌐 Public' : '🔒 Subscribers Only'}
+            · ${formatDate(post.created_at)}
+          </p>
+          <p class="post-stats">
+            👁️ ${post.view_count} views · ❤️ ${post.like_count} likes
+          </p>
+        </div>
+        <div class="post-actions">
+          <button class="btn-icon" onclick="editPost('${post.id}')">✏️</button>
+          <button class="btn-icon" onclick="deletePost('${post.id}')">🗑️</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  async function loadRecentSubscribers() {
+    if (!userId) return;
+
+    const { data, error } = await supabase
+      .from('subscriptions')
+      .select(`
+        *,
+        profiles!subscriptions_subscriber_id_fkey (
+          username,
+          display_name,
+          avatar_url
+        )
+      `)
+      .eq('creator_id', userId)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (error) {
+      console.error('Error loading subscribers:', error);
+      return;
+    }
+
+    const container = document.getElementById('recentSubscribers')!;
+
+    if (!data || data.length === 0) {
+      container.innerHTML = '<p class="empty">No subscribers yet</p>';
+      return;
+    }
+
+    container.innerHTML = data.map(sub => {
+      const profile = sub.profiles;
+      return `
+        <div class="subscriber-item">
+          <div class="subscriber-avatar">
+            ${profile.avatar_url
+              ? `<img src="${profile.avatar_url}" alt="${profile.username}">`
+              : '<div class="avatar-placeholder"></div>'}
+          </div>
+          <div class="subscriber-info">
+            <p class="subscriber-name">${profile.display_name || profile.username}</p>
+            <p class="subscriber-date">Subscribed ${formatDate(sub.created_at)}</p>
+          </div>
+          <a href="/messages/${profile.username}" class="btn-message">Message</a>
+        </div>
+      `;
+    }).join('');
+  }
+
+  async function loadEarnings() {
+    if (!userId) return;
+
+    const { data, error } = await supabase
+      .from('earnings')
+      .select('*')
+      .eq('creator_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error loading earnings:', error);
+      return;
+    }
+
+    // TODO: Render earnings chart
+  }
+
+  function formatDate(timestamp: string): string {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const days = Math.floor(diff / 86400000);
+
+    if (days === 0) return 'Today';
+    if (days === 1) return 'Yesterday';
+    if (days < 7) return `${days} days ago`;
+    return date.toLocaleDateString();
+  }
+
+  // Make functions global for onclick handlers
+  (window as any).editPost = (postId: string) => {
+    window.location.href = `/edit/${postId}`;
+  };
+
+  (window as any).deletePost = async (postId: string) => {
+    if (!confirm('Are you sure you want to delete this post?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('posts')
+        .delete()
+        .eq('id', postId);
+
+      if (error) throw error;
+
+      await loadRecentPosts();
+      await loadStats();
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      alert('Failed to delete post');
+    }
+  };
+</script>
+
+<style>
+  .dashboard-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+  }
+
+  .dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+  }
+
+  .dashboard-header h1 {
+    margin: 0;
+    font-size: 2rem;
+  }
+
+  .btn-upload {
+    padding: 0.75rem 1.5rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    text-decoration: none;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    transition: transform 0.2s;
+  }
+
+  .btn-upload:hover {
+    transform: translateY(-2px);
+  }
+
+  .dashboard-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 3rem;
+  }
+
+  .stat-card {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 1rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+  }
+
+  .stat-icon {
+    font-size: 2.5rem;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f8f9fa;
+    border-radius: 0.75rem;
+  }
+
+  .stat-info {
+    flex: 1;
+  }
+
+  .stat-label {
+    margin: 0 0 0.5rem 0;
+    color: #666;
+    font-size: 0.9rem;
+  }
+
+  .stat-value {
+    margin: 0 0 0.25rem 0;
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #1a1a1a;
+  }
+
+  .stat-change {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #48bb78;
+  }
+
+  .dashboard-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .content-section {
+    background: white;
+    padding: 2rem;
+    border-radius: 1rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .section-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+  }
+
+  .btn-secondary {
+    padding: 0.5rem 1rem;
+    background: #f0f0f0;
+    color: #333;
+    text-decoration: none;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    transition: background 0.2s;
+  }
+
+  .btn-secondary:hover {
+    background: #e0e0e0;
+  }
+
+  .posts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .post-item {
+    display: flex;
+    gap: 1rem;
+    padding: 1rem;
+    border: 1px solid #f0f0f0;
+    border-radius: 0.75rem;
+    transition: background 0.2s;
+  }
+
+  .post-item:hover {
+    background: #f8f9fa;
+  }
+
+  .post-thumbnail {
+    width: 100px;
+    height: 100px;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    background: #f0f0f0;
+    flex-shrink: 0;
+  }
+
+  .post-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .thumbnail-placeholder {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+
+  .post-details {
+    flex: 1;
+  }
+
+  .post-details h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.1rem;
+  }
+
+  .post-meta,
+  .post-stats {
+    margin: 0.25rem 0;
+    font-size: 0.9rem;
+    color: #666;
+  }
+
+  .post-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .btn-icon {
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    transition: background 0.2s;
+  }
+
+  .btn-icon:hover {
+    background: #e0e0e0;
+  }
+
+  .subscribers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .subscriber-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    border: 1px solid #f0f0f0;
+    border-radius: 0.75rem;
+  }
+
+  .subscriber-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: #f0f0f0;
+  }
+
+  .subscriber-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .avatar-placeholder {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+
+  .subscriber-info {
+    flex: 1;
+  }
+
+  .subscriber-name {
+    margin: 0 0 0.25rem 0;
+    font-weight: 600;
+    color: #1a1a1a;
+  }
+
+  .subscriber-date {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #666;
+  }
+
+  .btn-message {
+    padding: 0.5rem 1rem;
+    background: #667eea;
+    color: white;
+    text-decoration: none;
+    border-radius: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  .period-select {
+    padding: 0.5rem 1rem;
+    border: 1px solid #e0e0e0;
+    border-radius: 0.5rem;
+    background: white;
+    cursor: pointer;
+  }
+
+  .earnings-chart {
+    min-height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .chart-placeholder {
+    text-align: center;
+    color: #666;
+  }
+
+  .loading,
+  .empty {
+    text-align: center;
+    color: #666;
+    padding: 2rem;
+  }
+
+  @media (max-width: 768px) {
+    .dashboard-stats {
+      grid-template-columns: 1fr;
+    }
+
+    .dashboard-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+
+    .post-item {
+      flex-direction: column;
+    }
+
+    .post-thumbnail {
+      width: 100%;
+      height: 200px;
+    }
+  }
+</style>
