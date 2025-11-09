@@ -73,6 +73,29 @@ export async function signOut() {
   if (error) throw error;
 }
 
+export async function signInWithOAuth(provider: 'apple' | 'google' | 'github') {
+  const redirectTo = `${window.location.origin}/auth/callback`;
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider,
+    options: {
+      redirectTo,
+      scopes: provider === 'google' ? 'email profile' : undefined,
+    },
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function signInWithApple() {
+  return signInWithOAuth('apple');
+}
+
+export async function signInWithGoogle() {
+  return signInWithOAuth('google');
+}
+
 export async function updateProfile(updates: Partial<Profile>) {
   const user = currentUser.get();
   if (!user) throw new Error('Not authenticated');

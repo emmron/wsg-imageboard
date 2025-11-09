@@ -3,51 +3,124 @@ import Layout from '../layouts/Layout.astro';
 import Navigation from '../components/Navigation.astro';
 ---
 
-<Layout title="Explore - Vimeo">
+<Layout title="Explore Creators - FanConnect">
   <Navigation />
   <main class="main-content">
     <div class="container">
       <header class="page-header">
-        <h1>Explore Videos</h1>
-        <p>Discover trending and popular content</p>
+        <h1>Discover Creators</h1>
+        <p>Find and subscribe to your favorite content creators</p>
       </header>
-      
-      <div class="explore-grid">
-        <div class="category-section">
-          <h2>Trending Now</h2>
-          <div class="video-grid">
-            <div class="placeholder-card">
-              <div class="placeholder-video"></div>
-              <p>Trending videos will appear here</p>
-            </div>
-          </div>
-        </div>
-        
-        <div class="category-section">
-          <h2>Recently Uploaded</h2>
-          <div class="video-grid">
-            <div class="placeholder-card">
-              <div class="placeholder-video"></div>
-              <p>Recent uploads will appear here</p>
-            </div>
-          </div>
-        </div>
-        
-        <div class="category-section">
-          <h2>Popular Tags</h2>
-          <div class="tags-cloud">
-            <span class="tag">music</span>
-            <span class="tag">gaming</span>
-            <span class="tag">tutorial</span>
-            <span class="tag">art</span>
-            <span class="tag">technology</span>
-            <span class="tag">nature</span>
-          </div>
-        </div>
+
+      <div class="filters">
+        <button class="filter-btn active" data-filter="all">All Creators</button>
+        <button class="filter-btn" data-filter="new">New</button>
+        <button class="filter-btn" data-filter="popular">Popular</button>
+        <button class="filter-btn" data-filter="free">Free</button>
+      </div>
+
+      <div class="creators-grid" id="creatorsGrid">
+        <div class="loading">Loading creators...</div>
       </div>
     </div>
   </main>
 </Layout>
+
+<script>
+  import { supabase } from '../lib/supabase';
+
+  let currentFilter = 'all';
+
+  async function loadCreators(filter = 'all') {
+    try {
+      let query = supabase
+        .from('profiles')
+        .select('*')
+        .eq('is_creator', true);
+
+      // Apply filters
+      switch (filter) {
+        case 'new':
+          query = query.order('created_at', { ascending: false });
+          break;
+        case 'popular':
+          // Would need a view_count or subscriber_count field
+          query = query.order('created_at', { ascending: false });
+          break;
+        case 'free':
+          query = query.eq('subscription_price', 0);
+          break;
+        default:
+          query = query.order('created_at', { ascending: false});
+      }
+
+      const { data: creators, error } = await query.limit(24);
+
+      if (error) throw error;
+
+      const grid = document.getElementById('creatorsGrid')!;
+
+      if (!creators || creators.length === 0) {
+        grid.innerHTML = `
+          <div class="empty-state">
+            <h2>No creators found</h2>
+            <p>Be the first creator on the platform!</p>
+            <a href="/settings" class="btn-primary">Become a Creator</a>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = creators.map(creator => `
+        <a href="/profile/${creator.username}" class="creator-card">
+          <div class="creator-cover">
+            ${creator.cover_url
+              ? `<img src="${creator.cover_url}" alt="Cover">`
+              : '<div class="cover-placeholder"></div>'}
+          </div>
+          <div class="creator-info">
+            <div class="creator-avatar">
+              ${creator.avatar_url
+                ? `<img src="${creator.avatar_url}" alt="${creator.username}">`
+                : '<div class="avatar-placeholder"></div>'}
+            </div>
+            <h3>${creator.display_name || creator.username}</h3>
+            <p class="username">@${creator.username}</p>
+            ${creator.bio
+              ? `<p class="bio">${creator.bio.substring(0, 100)}${creator.bio.length > 100 ? '...' : ''}</p>`
+              : '<p class="bio">No bio yet</p>'}
+            <div class="creator-price">
+              ${creator.subscription_price > 0
+                ? `<span class="price">$${creator.subscription_price.toFixed(2)}/month</span>`
+                : '<span class="free-badge">Free</span>'}
+            </div>
+          </div>
+        </a>
+      `).join('');
+    } catch (error) {
+      console.error('Error loading creators:', error);
+      const grid = document.getElementById('creatorsGrid')!;
+      grid.innerHTML = '<p class="error">Failed to load creators</p>';
+    }
+  }
+
+  // Filter buttons
+  const filterBtns = document.querySelectorAll('.filter-btn');
+  filterBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const filter = btn.getAttribute('data-filter') || 'all';
+      currentFilter = filter;
+
+      filterBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      loadCreators(filter);
+    });
+  });
+
+  // Initial load
+  loadCreators();
+</script>
 
 <style>
   .main-content {
@@ -57,119 +130,222 @@ import Navigation from '../components/Navigation.astro';
   }
 
   .container {
-    max-width: 1200px;
+    max-width: 1400px;
     margin: 0 auto;
-    padding: 40px 20px;
+    padding: 3rem 2rem;
   }
 
   .page-header {
     text-align: center;
-    margin-bottom: 50px;
+    margin-bottom: 3rem;
   }
 
   .page-header h1 {
     font-size: 2.5rem;
-    font-weight: 300;
-    color: #333;
-    margin-bottom: 10px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin: 0 0 0.5rem 0;
   }
 
   .page-header p {
     font-size: 1.1rem;
     color: #666;
-  }
-
-  .explore-grid {
-    display: grid;
-    gap: 50px;
-  }
-
-  .category-section h2 {
-    font-size: 1.5rem;
-    font-weight: 400;
-    color: #333;
-    margin-bottom: 20px;
-    padding-bottom: 10px;
-    border-bottom: 2px solid #1ab7ea;
-  }
-
-  .video-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 20px;
-  }
-
-  .placeholder-card {
-    background: white;
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    transition: transform 0.2s ease;
-  }
-
-  .placeholder-card:hover {
-    transform: translateY(-5px);
-  }
-
-  .placeholder-video {
-    width: 100%;
-    height: 200px;
-    background: linear-gradient(45deg, #f0f0f0, #e0e0e0);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-  }
-
-  .placeholder-video::before {
-    content: "🎬";
-    font-size: 3rem;
-    opacity: 0.5;
-  }
-
-  .placeholder-card p {
-    padding: 20px;
-    text-align: center;
-    color: #666;
     margin: 0;
   }
 
-  .tags-cloud {
+  .filters {
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
+    gap: 1rem;
+    justify-content: center;
+    margin-bottom: 3rem;
   }
 
-  .tag {
-    background: #1ab7ea;
-    color: white;
-    padding: 6px 12px;
-    border-radius: 20px;
-    font-size: 0.9rem;
-    text-decoration: none;
-    transition: background 0.2s ease;
+  .filter-btn {
+    padding: 0.75rem 1.5rem;
+    background: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 0.5rem;
+    font-weight: 600;
     cursor: pointer;
+    transition: all 0.2s;
+    color: #666;
   }
 
-  .tag:hover {
-    background: #158bb8;
+  .filter-btn:hover {
+    border-color: #667eea;
+    color: #667eea;
+  }
+
+  .filter-btn.active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-color: #667eea;
+    color: white;
+  }
+
+  .creators-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 2rem;
+  }
+
+  .creator-card {
+    background: white;
+    border-radius: 1rem;
+    overflow: hidden;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.2s;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .creator-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  }
+
+  .creator-cover {
+    width: 100%;
+    height: 150px;
+    background: #f0f0f0;
+    overflow: hidden;
+  }
+
+  .creator-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .cover-placeholder {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+
+  .creator-info {
+    padding: 1.5rem;
+    position: relative;
+  }
+
+  .creator-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: #f0f0f0;
+    border: 4px solid white;
+    margin-top: -50px;
+    margin-bottom: 1rem;
+  }
+
+  .creator-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .avatar-placeholder {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+
+  .creator-info h3 {
+    margin: 0 0 0.25rem 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+  }
+
+  .username {
+    color: #999;
+    margin: 0 0 0.75rem 0;
+    font-size: 0.95rem;
+  }
+
+  .bio {
+    color: #666;
+    margin: 0 0 1rem 0;
+    line-height: 1.5;
+    font-size: 0.9rem;
+  }
+
+  .creator-price {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .price {
+    color: #667eea;
+    font-weight: 700;
+    font-size: 1.1rem;
+  }
+
+  .free-badge {
+    background: #48bb78;
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .loading,
+  .error,
+  .empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    grid-column: 1 / -1;
+  }
+
+  .loading {
+    color: #666;
+  }
+
+  .error {
+    color: #e53e3e;
+  }
+
+  .empty-state h2 {
+    margin: 0 0 1rem 0;
+    color: #333;
+  }
+
+  .empty-state p {
+    margin: 0 0 2rem 0;
+    color: #666;
+  }
+
+  .btn-primary {
+    display: inline-block;
+    padding: 1rem 2rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    text-decoration: none;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    transition: transform 0.2s;
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-2px);
   }
 
   @media (max-width: 768px) {
     .container {
-      padding: 20px 15px;
+      padding: 2rem 1rem;
     }
 
     .page-header h1 {
       font-size: 2rem;
     }
 
-    .video-grid {
-      grid-template-columns: 1fr;
+    .filters {
+      flex-wrap: wrap;
     }
 
-    .explore-grid {
-      gap: 30px;
+    .creators-grid {
+      grid-template-columns: 1fr;
     }
   }
 </style>

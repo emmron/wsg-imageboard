@@ -1,0 +1,128 @@
+---
+import Layout from '../../layouts/Layout.astro';
+---
+
+<Layout title="Authenticating...">
+  <main class="callback-container">
+    <div class="callback-card">
+      <div class="spinner"></div>
+      <h1>Signing you in...</h1>
+      <p id="statusMessage">Please wait while we complete your authentication.</p>
+    </div>
+  </main>
+</Layout>
+
+<script>
+  import { supabase } from '../../lib/supabase';
+  import { currentUser } from '../../lib/auth-store';
+
+  const statusMessage = document.getElementById('statusMessage') as HTMLParagraphElement;
+
+  async function handleCallback() {
+    try {
+      // Get the session from the URL hash
+      const { data: { session }, error } = await supabase.auth.getSession();
+
+      if (error) {
+        throw error;
+      }
+
+      if (session) {
+        statusMessage.textContent = 'Success! Redirecting...';
+
+        // Check if profile exists
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (profileError || !profile) {
+          // Profile doesn't exist, redirect to profile setup
+          // For now, just redirect to feed
+          setTimeout(() => {
+            window.location.href = '/feed';
+          }, 1000);
+        } else {
+          // Profile exists, redirect to feed
+          setTimeout(() => {
+            window.location.href = '/feed';
+          }, 1000);
+        }
+      } else {
+        // No session found
+        statusMessage.textContent = 'Authentication failed. Redirecting to login...';
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 2000);
+      }
+    } catch (error: any) {
+      console.error('Callback error:', error);
+      statusMessage.textContent = 'Something went wrong. Redirecting to login...';
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 2000);
+    }
+  }
+
+  // Run the callback handler
+  handleCallback();
+</script>
+
+<style>
+  .callback-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+
+  .callback-card {
+    background: white;
+    border-radius: 1rem;
+    padding: 3rem;
+    max-width: 450px;
+    width: 100%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    text-align: center;
+  }
+
+  .spinner {
+    width: 50px;
+    height: 50px;
+    margin: 0 auto 2rem auto;
+    border: 4px solid #f0f0f0;
+    border-top: 4px solid #667eea;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  h1 {
+    margin: 0 0 1rem 0;
+    font-size: 1.75rem;
+    color: #1a1a1a;
+  }
+
+  #statusMessage {
+    margin: 0;
+    color: #666;
+    line-height: 1.6;
+  }
+
+  @media (max-width: 640px) {
+    .callback-card {
+      padding: 2rem;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+    }
+  }
+</style>

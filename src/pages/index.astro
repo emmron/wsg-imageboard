@@ -3,430 +3,576 @@ import Layout from '../layouts/Layout.astro';
 import Navigation from '../components/Navigation.astro';
 ---
 
-<Layout title="Vimeo - Share your videos with the world">
+<Layout title="FanConnect - Premium Content Platform">
   <Navigation />
-  
+
   <main class="main">
     <!-- Hero Section -->
     <section class="hero">
-      <div class="container">
-        <h1>Share your videos with the world</h1>
-        <p>Upload, host, and share videos that inspire, educate, and entertain. Create something amazing.</p>
-        <button class="btn btn-large hero-upload-btn" id="hero-upload-btn">
-          Upload your first video
-        </button>
+      <div class="hero-content">
+        <h1>Connect with Your Favorite Creators</h1>
+        <p>Discover exclusive content and support creators you love</p>
+        <div class="hero-actions">
+          <a href="/signup" class="btn-primary">Get Started</a>
+          <a href="/explore" class="btn-secondary">Explore Creators</a>
+        </div>
+      </div>
+      <div class="hero-stats">
+        <div class="stat">
+          <span class="stat-number" id="creatorCount">0</span>
+          <span class="stat-label">Creators</span>
+        </div>
+        <div class="stat">
+          <span class="stat-number" id="postCount">0</span>
+          <span class="stat-label">Posts</span>
+        </div>
+        <div class="stat">
+          <span class="stat-number" id="subscriberCount">0</span>
+          <span class="stat-label">Subscribers</span>
+        </div>
       </div>
     </section>
 
-    <!-- Video Grid Section -->
-    <section class="videos-section">
+    <!-- Features Section -->
+    <section class="features">
       <div class="container">
-        <div class="section-header">
-          <h2>Recent uploads</h2>
-          <div class="section-controls">
-            <button class="filter-btn active" data-filter="all">All</button>
-            <button class="filter-btn" data-filter="recent">Recent</button>
-            <button class="filter-btn" data-filter="popular">Popular</button>
+        <h2>Why Choose FanConnect</h2>
+        <div class="features-grid">
+          <div class="feature-card">
+            <div class="feature-icon">💰</div>
+            <h3>Monetize Your Content</h3>
+            <p>Turn your passion into profit with subscription-based content</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">🔒</div>
+            <h3>Exclusive Content</h3>
+            <p>Share premium content with your most dedicated fans</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">📊</div>
+            <h3>Analytics & Insights</h3>
+            <p>Track your growth and earnings with detailed analytics</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">💬</div>
+            <h3>Direct Engagement</h3>
+            <p>Connect directly with your subscribers through messages</p>
           </div>
         </div>
-        
-        <!-- Video Grid -->
-        <div class="videos-grid" id="videos-grid">
-          <!-- Videos will be inserted here -->
-        </div>
+      </div>
+    </section>
 
-        <!-- Empty State -->
-        <div class="empty-state" id="empty-state" style="display: none;">
-          <h3>No videos yet</h3>
-          <p>Be the first to share a video with the community</p>
-          <button class="btn btn-large" id="empty-upload-btn">Upload first video</button>
+    <!-- Featured Creators Section -->
+    <section class="featured-creators">
+      <div class="container">
+        <div class="section-header">
+          <h2>Featured Creators</h2>
+          <a href="/explore" class="view-all">View All</a>
+        </div>
+        <div class="creators-grid" id="creatorsGrid">
+          <div class="loading">Loading creators...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="how-it-works">
+      <div class="container">
+        <h2>How It Works</h2>
+        <div class="steps-grid">
+          <div class="step">
+            <div class="step-number">1</div>
+            <h3>Create Your Account</h3>
+            <p>Sign up in seconds with email or social login</p>
+          </div>
+          <div class="step">
+            <div class="step-number">2</div>
+            <h3>Find Creators</h3>
+            <p>Browse and discover creators you love</p>
+          </div>
+          <div class="step">
+            <div class="step-number">3</div>
+            <h3>Subscribe & Enjoy</h3>
+            <p>Subscribe to access exclusive content</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+      <div class="container">
+        <h2>Ready to Get Started?</h2>
+        <p>Join thousands of creators and fans already on FanConnect</p>
+        <div class="cta-actions">
+          <a href="/signup" class="btn-primary btn-large">Sign Up Now</a>
+          <a href="/login" class="btn-outline btn-large">Sign In</a>
         </div>
       </div>
     </section>
   </main>
-
-  <!-- Video Modal -->
-  <div class="video-modal" id="video-modal">
-    <div class="modal-content">
-      <button class="close-btn" id="close-modal">×</button>
-      <video class="modal-video" id="modal-video" controls>
-        <track kind="captions" label="No captions available">
-      </video>
-      <div class="modal-info">
-        <h3 class="modal-title" id="modal-title">Video Title</h3>
-        <div class="modal-meta" id="modal-meta">
-          <span class="modal-author">Anonymous</span>
-          <span class="modal-date">Just now</span>
-        </div>
-      </div>
-    </div>
-  </div>
 </Layout>
 
 <script>
-  import { videos, showUploadModal } from '../lib/stores.ts';
+  import { supabase } from '../lib/supabase';
+  import { isAuthenticated } from '../lib/auth-store';
 
-  class VimeoVideoApp {
-    private videosGrid: HTMLElement;
-    private emptyState: HTMLElement;
-    private videoModal: HTMLElement;
-    private modalVideo: HTMLVideoElement;
-    private modalTitle: HTMLElement;
-    private modalMeta: HTMLElement;
-    private closeModal: HTMLElement;
-    private heroUploadBtn: HTMLElement;
-    private emptyUploadBtn: HTMLElement;
-    private filterBtns: NodeListOf<HTMLElement>;
-
-    constructor() {
-      this.videosGrid = document.getElementById('videos-grid') as HTMLElement;
-      this.emptyState = document.getElementById('empty-state') as HTMLElement;
-      this.videoModal = document.getElementById('video-modal') as HTMLElement;
-      this.modalVideo = document.getElementById('modal-video') as HTMLVideoElement;
-      this.modalTitle = document.getElementById('modal-title') as HTMLElement;
-      this.modalMeta = document.getElementById('modal-meta') as HTMLElement;
-      this.closeModal = document.getElementById('close-modal') as HTMLElement;
-      this.heroUploadBtn = document.getElementById('hero-upload-btn') as HTMLElement;
-      this.emptyUploadBtn = document.getElementById('empty-upload-btn') as HTMLElement;
-      this.filterBtns = document.querySelectorAll('.filter-btn') as NodeListOf<HTMLElement>;
-
-      this.setupEventListeners();
-      this.loadVideos();
+  // Check auth state and redirect if needed
+  isAuthenticated.subscribe((authenticated) => {
+    if (authenticated) {
+      // If user is authenticated, could redirect to feed
+      // window.location.href = '/feed';
     }
+  });
 
-    private setupEventListeners() {
-      // Upload button listeners
-      this.heroUploadBtn?.addEventListener('click', () => {
-        showUploadModal.set(true);
-      });
+  // Load platform stats
+  async function loadStats() {
+    try {
+      // Get creator count
+      const { count: creators } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_creator', true);
 
-      this.emptyUploadBtn?.addEventListener('click', () => {
-        showUploadModal.set(true);
-      });
+      // Get post count
+      const { count: posts } = await supabase
+        .from('posts')
+        .select('*', { count: 'exact', head: true });
 
-      // Modal listeners
-      this.videoModal?.addEventListener('click', (e) => {
-        if (e.target === this.videoModal) {
-          this.closeVideoModal();
-        }
-      });
+      // Get active subscriptions count
+      const { count: subscriptions } = await supabase
+        .from('subscriptions')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'active');
 
-      this.closeModal?.addEventListener('click', () => {
-        this.closeVideoModal();
-      });
-
-      // Filter listeners
-      this.filterBtns?.forEach(btn => {
-        btn.addEventListener('click', () => {
-          this.filterBtns.forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-          this.filterVideos(btn.dataset.filter || 'all');
-        });
-      });
-
-      // Escape key to close modal
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && this.videoModal.classList.contains('active')) {
-          this.closeVideoModal();
-        }
-      });
-
-      // Subscribe to video store changes
-      videos.subscribe((videoList) => {
-        this.renderVideos(videoList);
-      });
-    }
-
-    private loadVideos() {
-      const videoList = videos.get();
-      this.renderVideos(videoList);
-    }
-
-    private renderVideos(videoList: any[]) {
-      if (videoList.length === 0) {
-        this.emptyState.style.display = 'block';
-        this.videosGrid.style.display = 'none';
-        return;
-      }
-
-      this.emptyState.style.display = 'none';
-      this.videosGrid.style.display = 'grid';
-      this.videosGrid.innerHTML = '';
-
-      videoList.forEach(video => {
-        this.createVideoCard(video);
-      });
-    }
-
-    private createVideoCard(video: any) {
-      const card = document.createElement('div');
-      card.className = 'video-card';
-      card.innerHTML = `
-        <div class="video-thumbnail">
-          ${video.url ? `
-            <video class="video-thumb" src="${video.url}" preload="metadata" muted></video>
-            <div class="play-overlay">
-              <div class="play-icon"></div>
-            </div>
-          ` : `
-            <div class="video-placeholder">
-              <div class="play-icon"></div>
-            </div>
-          `}
-        </div>
-        <div class="video-info">
-          <h3 class="video-title">${this.escapeHtml(video.title || 'Untitled')}</h3>
-          <div class="video-meta">
-            <span class="video-author">Anonymous</span>
-            <span class="video-date">${this.formatDate(new Date(video.timestamp))}</span>
-          </div>
-        </div>
-      `;
-
-      card.addEventListener('click', () => {
-        this.openVideoModal(video);
-      });
-
-      this.videosGrid.appendChild(card);
-    }
-
-    private openVideoModal(video: any) {
-      if (!video.url) return;
-
-      this.modalVideo.src = video.url;
-      this.modalTitle.textContent = video.title || 'Untitled';
-      
-      const authorSpan = this.modalMeta.querySelector('.modal-author') as HTMLElement;
-      const dateSpan = this.modalMeta.querySelector('.modal-date') as HTMLElement;
-      
-      if (authorSpan) authorSpan.textContent = 'Anonymous';
-      if (dateSpan) dateSpan.textContent = this.formatDate(new Date(video.timestamp));
-
-      this.videoModal.classList.add('active');
-      document.body.style.overflow = 'hidden';
-    }
-
-    private closeVideoModal() {
-      this.videoModal.classList.remove('active');
-      this.modalVideo.src = '';
-      document.body.style.overflow = '';
-    }
-
-    private filterVideos(filter: string) {
-      const videoList = videos.get();
-      let filteredVideos = [...videoList];
-
-      switch (filter) {
-        case 'recent':
-          filteredVideos.sort((a, b) => b.timestamp - a.timestamp);
-          break;
-        case 'popular':
-          // Sort by number of comments (as a simple popularity metric)
-          filteredVideos.sort((a, b) => (b.comments?.length || 0) - (a.comments?.length || 0));
-          break;
-        default:
-          // 'all' - keep original order
-          break;
-      }
-
-      this.renderVideos(filteredVideos);
-    }
-
-    private formatDate(date: Date): string {
-      const now = new Date();
-      const diff = now.getTime() - date.getTime();
-      const seconds = Math.floor(diff / 1000);
-      const minutes = Math.floor(seconds / 60);
-      const hours = Math.floor(minutes / 60);
-      const days = Math.floor(hours / 24);
-
-      if (days > 0) {
-        return days === 1 ? '1 day ago' : `${days} days ago`;
-      } else if (hours > 0) {
-        return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
-      } else if (minutes > 0) {
-        return minutes === 1 ? '1 minute ago' : `${minutes} minutes ago`;
-      } else {
-        return 'Just now';
-      }
-    }
-
-    private escapeHtml(text: string): string {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
+      // Update stats
+      document.getElementById('creatorCount')!.textContent = (creators || 0).toLocaleString();
+      document.getElementById('postCount')!.textContent = (posts || 0).toLocaleString();
+      document.getElementById('subscriberCount')!.textContent = (subscriptions || 0).toLocaleString();
+    } catch (error) {
+      console.error('Error loading stats:', error);
     }
   }
 
-  // Initialize the app
-  document.addEventListener('DOMContentLoaded', () => {
-    new VimeoVideoApp();
-  });
+  // Load featured creators
+  async function loadFeaturedCreators() {
+    try {
+      const { data: creators, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('is_creator', true)
+        .limit(6)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const grid = document.getElementById('creatorsGrid')!;
+
+      if (!creators || creators.length === 0) {
+        grid.innerHTML = '<p class="empty">No creators yet. Be the first!</p>';
+        return;
+      }
+
+      grid.innerHTML = creators.map(creator => `
+        <a href="/profile/${creator.username}" class="creator-card">
+          <div class="creator-avatar">
+            ${creator.avatar_url
+              ? `<img src="${creator.avatar_url}" alt="${creator.username}">`
+              : `<div class="avatar-placeholder"></div>`}
+          </div>
+          <h3>${creator.display_name || creator.username}</h3>
+          <p class="creator-username">@${creator.username}</p>
+          ${creator.bio ? `<p class="creator-bio">${creator.bio.substring(0, 80)}...</p>` : ''}
+          <div class="creator-price">
+            ${creator.subscription_price > 0
+              ? `$${creator.subscription_price.toFixed(2)}/month`
+              : 'Free'}
+          </div>
+        </a>
+      `).join('');
+    } catch (error) {
+      console.error('Error loading creators:', error);
+    }
+  }
+
+  // Initialize
+  loadStats();
+  loadFeaturedCreators();
 </script>
 
 <style>
   .main {
-    margin-top: 60px;
-    min-height: calc(100vh - 60px);
+    min-height: 100vh;
   }
 
+  /* Hero Section */
   .hero {
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    padding: 80px 0;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 6rem 2rem 4rem 2rem;
     text-align: center;
-    border-bottom: 1px solid #e9ecef;
+    margin-top: 60px;
   }
 
-  .hero h1 {
-    font-size: 48px;
-    font-weight: 300;
-    color: #333333;
-    margin-bottom: 20px;
-    letter-spacing: -2px;
+  .hero-content h1 {
+    font-size: 3.5rem;
+    font-weight: 700;
+    margin: 0 0 1rem 0;
     line-height: 1.2;
   }
 
-  .hero p {
-    font-size: 18px;
-    color: #666666;
-    margin-bottom: 40px;
-    font-weight: 300;
-    max-width: 600px;
-    margin-left: auto;
-    margin-right: auto;
+  .hero-content p {
+    font-size: 1.5rem;
+    margin: 0 0 2rem 0;
+    opacity: 0.95;
   }
 
-  .hero-upload-btn {
-    font-size: 16px;
-    padding: 16px 32px;
-    border-radius: 4px;
-    box-shadow: 0 2px 8px rgba(26, 183, 234, 0.3);
-    transition: all 0.3s ease;
+  .hero-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-bottom: 3rem;
   }
 
-  .hero-upload-btn:hover {
+  .btn-primary,
+  .btn-secondary {
+    padding: 1rem 2rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s;
+    font-size: 1.1rem;
+  }
+
+  .btn-primary {
+    background: white;
+    color: #667eea;
+  }
+
+  .btn-primary:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 16px rgba(26, 183, 234, 0.4);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
   }
 
-  .videos-section {
-    padding: 60px 0;
+  .btn-secondary {
+    background: transparent;
+    color: white;
+    border: 2px solid white;
+  }
+
+  .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .hero-stats {
+    display: flex;
+    gap: 4rem;
+    justify-content: center;
+    padding-top: 2rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .stat-number {
+    font-size: 2.5rem;
+    font-weight: 700;
+  }
+
+  .stat-label {
+    font-size: 1rem;
+    opacity: 0.9;
+  }
+
+  /* Features Section */
+  .features {
+    padding: 5rem 2rem;
+    background: white;
+  }
+
+  .features h2 {
+    text-align: center;
+    font-size: 2.5rem;
+    margin: 0 0 3rem 0;
+  }
+
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .feature-card {
+    text-align: center;
+    padding: 2rem;
+    border-radius: 1rem;
+    background: #f8f9fa;
+    transition: transform 0.2s;
+  }
+
+  .feature-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  }
+
+  .feature-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+  }
+
+  .feature-card h3 {
+    margin: 0 0 0.75rem 0;
+    font-size: 1.3rem;
+  }
+
+  .feature-card p {
+    margin: 0;
+    color: #666;
+    line-height: 1.6;
+  }
+
+  /* Featured Creators */
+  .featured-creators {
+    padding: 5rem 2rem;
+    background: #f8f9fa;
   }
 
   .section-header {
     display: flex;
-    align-items: center;
     justify-content: space-between;
-    margin-bottom: 40px;
+    align-items: center;
+    margin-bottom: 2rem;
   }
 
   .section-header h2 {
-    font-size: 28px;
-    font-weight: 300;
-    color: #333333;
-    letter-spacing: -1px;
+    margin: 0;
+    font-size: 2rem;
   }
 
-  .section-controls {
-    display: flex;
-    gap: 10px;
+  .view-all {
+    color: #667eea;
+    text-decoration: none;
+    font-weight: 600;
   }
 
-  .filter-btn {
-    background: transparent;
-    border: 1px solid #dddddd;
-    color: #666666;
-    padding: 8px 16px;
-    border-radius: 3px;
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    font-family: inherit;
+  .view-all:hover {
+    text-decoration: underline;
   }
 
-  .filter-btn:hover {
-    border-color: #1ab7ea;
-    color: #1ab7ea;
+  .creators-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 2rem;
   }
 
-  .filter-btn.active {
-    background: #1ab7ea;
-    border-color: #1ab7ea;
-    color: white;
+  .creator-card {
+    background: white;
+    border-radius: 1rem;
+    padding: 2rem;
+    text-align: center;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.2s;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
 
-  .video-placeholder {
+  .creator-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  }
+
+  .creator-avatar {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    margin: 0 auto 1rem auto;
+    overflow: hidden;
+    background: #f0f0f0;
+  }
+
+  .creator-avatar img {
     width: 100%;
     height: 100%;
-    background: linear-gradient(135deg, #f1f3f4 0%, #e8eaed 100%);
+    object-fit: cover;
+  }
+
+  .avatar-placeholder {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+
+  .creator-card h3 {
+    margin: 0 0 0.25rem 0;
+    font-size: 1.25rem;
+  }
+
+  .creator-username {
+    color: #999;
+    margin: 0 0 0.75rem 0;
+    font-size: 0.95rem;
+  }
+
+  .creator-bio {
+    color: #666;
+    margin: 0 0 1rem 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+
+  .creator-price {
+    color: #667eea;
+    font-weight: 700;
+    font-size: 1.1rem;
+  }
+
+  /* How It Works */
+  .how-it-works {
+    padding: 5rem 2rem;
+    background: white;
+  }
+
+  .how-it-works h2 {
+    text-align: center;
+    font-size: 2.5rem;
+    margin: 0 0 3rem 0;
+  }
+
+  .steps-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 3rem;
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+
+  .step {
+    text-align: center;
+  }
+
+  .step-number {
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0 auto 1.5rem auto;
   }
 
-  .video-placeholder .play-icon {
-    opacity: 0.7;
+  .step h3 {
+    margin: 0 0 0.75rem 0;
+    font-size: 1.3rem;
   }
 
-  /* Responsive Design */
+  .step p {
+    margin: 0;
+    color: #666;
+    line-height: 1.6;
+  }
+
+  /* CTA Section */
+  .cta-section {
+    padding: 5rem 2rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    text-align: center;
+  }
+
+  .cta-section h2 {
+    font-size: 2.5rem;
+    margin: 0 0 1rem 0;
+  }
+
+  .cta-section p {
+    font-size: 1.25rem;
+    margin: 0 0 2rem 0;
+    opacity: 0.95;
+  }
+
+  .cta-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+  }
+
+  .btn-large {
+    padding: 1.25rem 2.5rem;
+    font-size: 1.1rem;
+  }
+
+  .btn-outline {
+    background: transparent;
+    color: white;
+    border: 2px solid white;
+    text-decoration: none;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    transition: all 0.2s;
+  }
+
+  .btn-outline:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .loading,
+  .empty {
+    text-align: center;
+    color: #666;
+    padding: 3rem;
+  }
+
+  /* Responsive */
   @media (max-width: 768px) {
-    .hero {
-      padding: 60px 0;
+    .hero-content h1 {
+      font-size: 2.5rem;
     }
 
-    .hero h1 {
-      font-size: 36px;
+    .hero-content p {
+      font-size: 1.2rem;
     }
 
-    .hero p {
-      font-size: 16px;
-      margin-bottom: 30px;
-    }
-
-    .section-header {
+    .hero-actions {
       flex-direction: column;
-      align-items: flex-start;
-      gap: 20px;
     }
 
-    .section-header h2 {
-      font-size: 24px;
+    .hero-stats {
+      gap: 2rem;
     }
 
-    .section-controls {
-      align-self: stretch;
+    .stat-number {
+      font-size: 2rem;
     }
 
-    .filter-btn {
-      flex: 1;
-      text-align: center;
+    .features h2,
+    .how-it-works h2,
+    .cta-section h2 {
+      font-size: 2rem;
     }
 
-    .videos-section {
-      padding: 40px 0;
-    }
-  }
-
-  @media (max-width: 480px) {
-    .hero {
-      padding: 40px 0;
+    .creators-grid {
+      grid-template-columns: 1fr;
     }
 
-    .hero h1 {
-      font-size: 28px;
-    }
-
-    .hero p {
-      font-size: 15px;
-    }
-
-    .section-header h2 {
-      font-size: 22px;
-    }
-
-    .filter-btn {
-      font-size: 13px;
-      padding: 6px 12px;
+    .cta-actions {
+      flex-direction: column;
     }
   }
 </style>
