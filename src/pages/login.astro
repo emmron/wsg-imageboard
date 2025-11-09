@@ -94,7 +94,22 @@ import Layout from '../layouts/Layout.astro';
       await signIn(email, password);
       window.location.href = '/feed';
     } catch (error: any) {
-      errorMessage.textContent = error.message || 'Failed to sign in';
+      console.error('Login error:', error);
+
+      // Provide helpful error messages
+      if (error.message?.includes('Invalid API key') || error.message?.includes('fetch')) {
+        errorMessage.innerHTML = `
+          <strong>⚠️ Supabase Not Configured</strong><br>
+          Please set up your database first. See <strong>QUICKSTART.md</strong> for instructions.
+        `;
+      } else if (error.message?.includes('Invalid login credentials')) {
+        errorMessage.textContent = 'Invalid email or password. Please try again.';
+      } else if (error.message?.includes('Email not confirmed')) {
+        errorMessage.textContent = 'Please verify your email before logging in.';
+      } else {
+        errorMessage.textContent = error.message || 'Failed to sign in. Check browser console (F12) for details.';
+      }
+
       submitBtn.disabled = false;
       submitBtn.textContent = 'Sign In';
     }

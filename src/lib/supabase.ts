@@ -6,11 +6,27 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
 const supabaseServiceKey = import.meta.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
+  console.error('⚠️  SUPABASE NOT CONFIGURED ⚠️');
+  console.error('');
+  console.error('To use this platform, you need to:');
+  console.error('1. Create a Supabase project at https://supabase.com');
+  console.error('2. Create a .env file with your Supabase credentials');
+  console.error('3. See QUICKSTART.md for detailed setup instructions');
+  console.error('');
+  console.error('Missing variables:');
+  if (!supabaseUrl) console.error('  - PUBLIC_SUPABASE_URL');
+  if (!supabaseAnonKey) console.error('  - PUBLIC_SUPABASE_ANON_KEY');
+
+  // Don't throw error, create dummy client for development
+  // This allows the app to load but shows helpful errors
 }
 
 // Client for browser (uses anon key, respects RLS)
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Use dummy values if not configured to allow app to load
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'placeholder-key'
+);
 
 // Admin client for server-side operations (bypasses RLS)
 export const supabaseAdmin = supabaseServiceKey
