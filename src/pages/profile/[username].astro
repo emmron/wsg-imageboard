@@ -81,9 +81,10 @@ const { username } = Astro.params;
 <script>
   import { supabase, type Profile, type Post } from '../../lib/supabase';
   import { currentUser, isAuthenticated } from '../../lib/auth-store';
+  import { isLocalMode, getLocalUserByUsername } from '../../lib/local-auth';
 
   const username = window.location.pathname.split('/')[2];
-  let profile: Profile | null = null;
+  let profile: any = null;
   let currentUserId: string | null = null;
 
   // Get current user
@@ -93,30 +94,38 @@ const { username } = Astro.params;
 
   async function loadProfile() {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('username', username)
-        .single();
+      if (isLocalMode) {
+        // Local mode - get from localStorage
+        const localUser = getLocalUserByUsername(username);
+        if (!localUser) throw new Error('User not found');
+        profile = localUser;
+      } else {
+        // Supabase mode
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('username', username)
+          .single();
 
-      if (error) throw error;
-      profile = data;
-
-      // Update UI
-      document.querySelector('.display-name')!.textContent = data.display_name || data.username;
-      document.querySelector('.bio')!.textContent = data.bio || 'No bio yet';
-      document.getElementById('aboutBio')!.textContent = data.bio || 'No bio available';
-      document.getElementById('subPrice')!.textContent = data.subscription_price.toFixed(2);
-
-      // Update avatar and cover
-      if (data.avatar_url) {
-        const avatar = document.querySelector('.avatar-placeholder') as HTMLDivElement;
-        avatar.style.backgroundImage = `url(${data.avatar_url})`;
+        if (error) throw error;
+        profile = data;
       }
 
-      if (data.cover_url) {
+      // Update UI
+      document.querySelector('.display-name')!.textContent = profile.display_name || profile.username;
+      document.querySelector('.bio')!.textContent = profile.bio || 'No bio yet';
+      document.getElementById('aboutBio')!.textContent = profile.bio || 'No bio available';
+      document.getElementById('subPrice')!.textContent = profile.subscription_price.toFixed(2);
+
+      // Update avatar and cover
+      if (profile.avatar_url) {
+        const avatar = document.querySelector('.avatar-placeholder') as HTMLDivElement;
+        avatar.style.backgroundImage = `url(${profile.avatar_url})`;
+      }
+
+      if (profile.cover_url) {
         const cover = document.querySelector('.cover-placeholder') as HTMLDivElement;
-        cover.style.backgroundImage = `url(${data.cover_url})`;
+        cover.style.backgroundImage = `url(${profile.cover_url})`;
       }
 
       // Load posts
@@ -135,15 +144,23 @@ const { username } = Astro.params;
     if (!profile) return;
 
     try {
-      const { data, error } = await supabase
-        .from('posts')
-        .select('*')
-        .eq('creator_id', profile.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
       const postsGrid = document.getElementById('postsGrid')!;
+      let data;
+
+      if (isLocalMode) {
+        // Local mode - no posts stored locally yet
+        data = [];
+      } else {
+        // Supabase mode
+        const { data: postsData, error } = await supabase
+          .from('posts')
+          .select('*')
+          .eq('creator_id', profile.id)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        data = postsData;
+      }
 
       if (!data || data.length === 0) {
         postsGrid.innerHTML = '<p class="empty">No posts yet</p>';

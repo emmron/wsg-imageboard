@@ -116,6 +116,7 @@ import Navigation from '../components/Navigation.astro';
 <script>
   import { supabase } from '../lib/supabase';
   import { isAuthenticated } from '../lib/auth-store';
+  import { isLocalMode, getLocalCreators } from '../lib/local-auth';
 
   // Check auth state and redirect if needed
   isAuthenticated.subscribe((authenticated) => {
@@ -128,27 +129,41 @@ import Navigation from '../components/Navigation.astro';
   // Load platform stats
   async function loadStats() {
     try {
-      // Get creator count
-      const { count: creators } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_creator', true);
+      let creators = 0;
+      let posts = 0;
+      let subscriptions = 0;
 
-      // Get post count
-      const { count: posts } = await supabase
-        .from('posts')
-        .select('*', { count: 'exact', head: true });
+      if (isLocalMode) {
+        // Local mode - use localStorage data
+        const localCreators = getLocalCreators();
+        creators = localCreators.length;
+        posts = 0; // No posts in local mode yet
+        subscriptions = 0; // No subscriptions in local mode yet
+      } else {
+        // Supabase mode
+        const { count: creatorsCount } = await supabase
+          .from('profiles')
+          .select('*', { count: 'exact', head: true })
+          .eq('is_creator', true);
 
-      // Get active subscriptions count
-      const { count: subscriptions } = await supabase
-        .from('subscriptions')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'active');
+        const { count: postsCount } = await supabase
+          .from('posts')
+          .select('*', { count: 'exact', head: true });
+
+        const { count: subscriptionsCount } = await supabase
+          .from('subscriptions')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'active');
+
+        creators = creatorsCount || 0;
+        posts = postsCount || 0;
+        subscriptions = subscriptionsCount || 0;
+      }
 
       // Update stats
-      document.getElementById('creatorCount')!.textContent = (creators || 0).toLocaleString();
-      document.getElementById('postCount')!.textContent = (posts || 0).toLocaleString();
-      document.getElementById('subscriberCount')!.textContent = (subscriptions || 0).toLocaleString();
+      document.getElementById('creatorCount')!.textContent = creators.toLocaleString();
+      document.getElementById('postCount')!.textContent = posts.toLocaleString();
+      document.getElementById('subscriberCount')!.textContent = subscriptions.toLocaleString();
     } catch (error) {
       console.error('Error loading stats:', error);
     }
@@ -157,14 +172,23 @@ import Navigation from '../components/Navigation.astro';
   // Load featured creators
   async function loadFeaturedCreators() {
     try {
-      const { data: creators, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('is_creator', true)
-        .limit(6)
-        .order('created_at', { ascending: false });
+      let creators;
 
-      if (error) throw error;
+      if (isLocalMode) {
+        // Local mode - get from localStorage
+        creators = getLocalCreators().slice(0, 6);
+      } else {
+        // Supabase mode
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('is_creator', true)
+          .limit(6)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        creators = data;
+      }
 
       const grid = document.getElementById('creatorsGrid')!;
 

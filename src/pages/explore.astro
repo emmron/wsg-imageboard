@@ -28,35 +28,57 @@ import Navigation from '../components/Navigation.astro';
 
 <script>
   import { supabase } from '../lib/supabase';
+  import { isLocalMode, getLocalCreators } from '../lib/local-auth';
 
   let currentFilter = 'all';
 
   async function loadCreators(filter = 'all') {
     try {
-      let query = supabase
-        .from('profiles')
-        .select('*')
-        .eq('is_creator', true);
+      let creators;
 
-      // Apply filters
-      switch (filter) {
-        case 'new':
-          query = query.order('created_at', { ascending: false });
-          break;
-        case 'popular':
-          // Would need a view_count or subscriber_count field
-          query = query.order('created_at', { ascending: false });
-          break;
-        case 'free':
-          query = query.eq('subscription_price', 0);
-          break;
-        default:
-          query = query.order('created_at', { ascending: false});
+      if (isLocalMode) {
+        // Local mode - get from localStorage
+        creators = getLocalCreators();
+
+        // Apply filters
+        switch (filter) {
+          case 'new':
+            creators.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+            break;
+          case 'popular':
+            // For now, same as new
+            creators.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+            break;
+          case 'free':
+            creators = creators.filter(c => c.subscription_price === 0);
+            break;
+        }
+      } else {
+        // Supabase mode
+        let query = supabase
+          .from('profiles')
+          .select('*')
+          .eq('is_creator', true);
+
+        // Apply filters
+        switch (filter) {
+          case 'new':
+            query = query.order('created_at', { ascending: false });
+            break;
+          case 'popular':
+            query = query.order('created_at', { ascending: false });
+            break;
+          case 'free':
+            query = query.eq('subscription_price', 0);
+            break;
+          default:
+            query = query.order('created_at', { ascending: false});
+        }
+
+        const { data, error } = await query.limit(24);
+        if (error) throw error;
+        creators = data;
       }
-
-      const { data: creators, error } = await query.limit(24);
-
-      if (error) throw error;
 
       const grid = document.getElementById('creatorsGrid')!;
 
