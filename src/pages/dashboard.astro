@@ -1,8 +1,10 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import Navigation from '../components/Navigation.astro';
 ---
 
-<Layout title="Creator Dashboard">
+<Layout title="Creator Dashboard - FanConnect">
+  <Navigation />
   <main class="dashboard-container">
     <div class="dashboard-header">
       <h1>Creator Dashboard</h1>
@@ -267,7 +269,71 @@ import Layout from '../layouts/Layout.astro';
       return;
     }
 
-    // TODO: Render earnings chart
+    renderEarningsChart(data || []);
+  }
+
+  function renderEarningsChart(earnings: any[]) {
+    const container = document.getElementById('earningsChart')!;
+
+    if (!earnings || earnings.length === 0) {
+      container.innerHTML = `
+        <div class="chart-placeholder">
+          <div class="chart-empty-icon">📊</div>
+          <p>No earnings data yet</p>
+          <p class="chart-hint">Start creating content to see your earnings here</p>
+        </div>
+      `;
+      return;
+    }
+
+    // Group earnings by day for the last 30 days
+    const now = new Date();
+    const days = 30;
+    const dailyEarnings: Record<string, number> = {};
+
+    for (let i = 0; i < days; i++) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      const key = date.toISOString().split('T')[0];
+      dailyEarnings[key] = 0;
+    }
+
+    earnings.forEach(e => {
+      const key = new Date(e.created_at).toISOString().split('T')[0];
+      if (dailyEarnings[key] !== undefined) {
+        dailyEarnings[key] += Number(e.amount);
+      }
+    });
+
+    const sortedDays = Object.keys(dailyEarnings).sort();
+    const values = sortedDays.map(d => dailyEarnings[d]);
+    const maxVal = Math.max(...values, 1);
+    const total = values.reduce((a, b) => a + b, 0);
+
+    container.innerHTML = `
+      <div class="chart-summary">
+        <div class="chart-total">
+          <span class="chart-total-label">Last 30 days</span>
+          <span class="chart-total-value">$${total.toFixed(2)}</span>
+        </div>
+      </div>
+      <div class="chart-bars">
+        ${sortedDays.map((day, i) => {
+          const val = values[i];
+          const height = Math.max((val / maxVal) * 100, 2);
+          const label = new Date(day).toLocaleDateString('en', { month: 'short', day: 'numeric' });
+          return `
+            <div class="chart-bar-wrapper" title="${label}: $${val.toFixed(2)}">
+              <div class="chart-bar" style="height: ${height}%"></div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+      <div class="chart-labels">
+        <span>${new Date(sortedDays[0]).toLocaleDateString('en', { month: 'short', day: 'numeric' })}</span>
+        <span>${new Date(sortedDays[sortedDays.length - 1]).toLocaleDateString('en', { month: 'short', day: 'numeric' })}</span>
+      </div>
+    `;
   }
 
   function formatDate(timestamp: string): string {
@@ -312,6 +378,7 @@ import Layout from '../layouts/Layout.astro';
     max-width: 1400px;
     margin: 0 auto;
     padding: 2rem 1rem;
+    margin-top: 60px;
   }
 
   .dashboard-header {
@@ -585,6 +652,70 @@ import Layout from '../layouts/Layout.astro';
   .chart-placeholder {
     text-align: center;
     color: #666;
+  }
+
+  .chart-empty-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+  }
+
+  .chart-hint {
+    font-size: 0.85rem;
+    color: #999;
+    margin-top: 0.5rem;
+  }
+
+  .chart-summary {
+    margin-bottom: 1.5rem;
+  }
+
+  .chart-total-label {
+    display: block;
+    font-size: 0.85rem;
+    color: #666;
+    margin-bottom: 0.25rem;
+  }
+
+  .chart-total-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #1a1a1a;
+  }
+
+  .chart-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 200px;
+    padding: 0 0.25rem;
+  }
+
+  .chart-bar-wrapper {
+    flex: 1;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+    cursor: pointer;
+  }
+
+  .chart-bar {
+    width: 100%;
+    background: linear-gradient(to top, #667eea, #764ba2);
+    border-radius: 2px 2px 0 0;
+    min-height: 2px;
+    transition: opacity 0.2s;
+  }
+
+  .chart-bar-wrapper:hover .chart-bar {
+    opacity: 0.8;
+  }
+
+  .chart-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: #999;
   }
 
   .loading,

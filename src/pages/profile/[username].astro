@@ -1,11 +1,12 @@
 ---
 import Layout from '../../layouts/Layout.astro';
+import Navigation from '../../components/Navigation.astro';
 
-// This will be populated with real data once Supabase is configured
 const { username } = Astro.params;
 ---
 
-<Layout title={`@${username} - Profile`}>
+<Layout title={`@${username} - FanConnect`}>
+  <Navigation />
   <main class="profile-container">
     <div class="profile-header" id="profileHeader">
       <div class="cover-image">
@@ -225,6 +226,7 @@ const { username } = Astro.params;
     max-width: 1200px;
     margin: 0 auto;
     padding: 0;
+    margin-top: 60px;
   }
 
   .profile-header {
