@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { validateUploadContent } from '../../../../lib/content-policy';
 
 export const prerender = false;
 
@@ -74,6 +75,18 @@ export const POST: APIRoute = async ({ request }) => {
       return new Response(JSON.stringify({
         success: false,
         message: 'Missing required fields: filename, fileSize, title'
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Content policy check
+    const contentCheck = validateUploadContent(title, tags, filename);
+    if (contentCheck.blocked) {
+      return new Response(JSON.stringify({
+        success: false,
+        message: contentCheck.warnings[0] || 'Content violates community guidelines.'
       }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }

@@ -185,6 +185,24 @@ import Navigation from '../components/Navigation.astro';
             <p class="help-text">Set to 0 for free content</p>
           </div>
 
+          <div class="creator-agreement" id="creatorAgreement">
+            <h3>Creator Agreement</h3>
+            <p>By enabling creator mode you confirm that:</p>
+            <ul>
+              <li>You are at least 18 years old</li>
+              <li>All people in your content are 18+ and have given documented consent</li>
+              <li>You own the content or hold a valid licence</li>
+              <li>You will comply with our <a href="/guidelines" target="_blank">Community Guidelines</a></li>
+              <li>You will honour valid takedown requests within 24 hours</li>
+            </ul>
+            <div class="form-group checkbox-group">
+              <label>
+                <input type="checkbox" id="agreeCreatorTerms" />
+                <span>I agree to the Creator Agreement and <a href="/terms" target="_blank">Terms of Service</a></span>
+              </label>
+            </div>
+          </div>
+
           <div id="creatorError" class="error-message"></div>
           <div id="creatorSuccess" class="success-message"></div>
 
@@ -409,10 +427,18 @@ import Navigation from '../components/Navigation.astro';
 
     const formData = new FormData(creatorForm);
     const isCreator = (document.getElementById('isCreator') as HTMLInputElement).checked;
+    const agreeCreatorTerms = (document.getElementById('agreeCreatorTerms') as HTMLInputElement).checked;
     const subscriptionPrice = parseFloat(formData.get('subscriptionPrice') as string) || 0;
 
     creatorError.textContent = '';
     creatorSuccess.textContent = '';
+
+    // Require agreement when enabling creator mode
+    if (isCreator && !agreeCreatorTerms) {
+      creatorError.textContent = 'You must agree to the Creator Agreement to enable creator mode.';
+      return;
+    }
+
     saveCreatorBtn.disabled = true;
     saveCreatorBtn.textContent = 'Saving...';
 
@@ -421,6 +447,15 @@ import Navigation from '../components/Navigation.astro';
         is_creator: isCreator,
         subscription_price: subscriptionPrice,
       });
+
+      // Record creator agreement
+      if (isCreator && agreeCreatorTerms) {
+        await supabase.from('creator_agreements').upsert({
+          creator_id: user.id,
+          agreement_version: '1.0',
+          agreed_at: new Date().toISOString(),
+        }, { onConflict: 'creator_id,agreement_version' });
+      }
 
       creatorSuccess.textContent = 'Creator settings updated successfully!';
       saveCreatorBtn.disabled = false;
@@ -680,6 +715,43 @@ import Navigation from '../components/Navigation.astro';
 
   .btn-danger:hover {
     background: #c53030;
+  }
+
+  .creator-agreement {
+    background: #f8f9fa;
+    border: 2px solid #e0e0e0;
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+  }
+
+  .creator-agreement h3 {
+    margin: 0 0 0.75rem 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+  }
+
+  .creator-agreement p {
+    margin: 0 0 0.75rem 0;
+    color: #555;
+    font-size: 0.9rem;
+  }
+
+  .creator-agreement ul {
+    list-style: disc;
+    padding-left: 1.25rem;
+    margin: 0 0 1rem 0;
+  }
+
+  .creator-agreement li {
+    color: #555;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    margin-bottom: 0.25rem;
+  }
+
+  .creator-agreement a {
+    color: #667eea;
+    font-weight: 600;
   }
 
   .error-message,

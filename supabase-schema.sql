@@ -39,6 +39,9 @@ CREATE TABLE IF NOT EXISTS public.posts (
     view_count INTEGER DEFAULT 0,
     like_count INTEGER DEFAULT 0,
     tags TEXT[],
+    moderation_status TEXT NOT NULL DEFAULT 'approved' CHECK (moderation_status IN ('pending', 'approved', 'flagged', 'removed', 'under_review')),
+    moderation_note TEXT,
+    report_count INTEGER DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -104,6 +107,34 @@ CREATE TABLE IF NOT EXISTS public.earnings (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Content Reports table
+CREATE TABLE IF NOT EXISTS public.content_reports (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    post_id UUID NOT NULL REFERENCES public.posts(id) ON DELETE CASCADE,
+    reporter_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    reason TEXT NOT NULL CHECK (reason IN (
+        'non_consensual_content', 'underage_content', 'copyright_violation',
+        'harassment_or_bullying', 'spam_or_scam', 'impersonation',
+        'illegal_activity', 'doxxing_personal_info', 'misleading_content', 'other'
+    )),
+    details TEXT,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'reviewed', 'actioned', 'dismissed')),
+    reviewed_by UUID REFERENCES public.profiles(id),
+    reviewed_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(post_id, reporter_id)
+);
+
+-- Creator agreements tracking
+CREATE TABLE IF NOT EXISTS public.creator_agreements (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    creator_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    agreement_version TEXT NOT NULL DEFAULT '1.0',
+    agreed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    ip_address TEXT,
+    UNIQUE(creator_id, agreement_version)
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_posts_creator_id ON public.posts(creator_id);
 CREATE INDEX IF NOT EXISTS idx_posts_created_at ON public.posts(created_at DESC);
@@ -115,6 +146,9 @@ CREATE INDEX IF NOT EXISTS idx_follows_follower_id ON public.follows(follower_id
 CREATE INDEX IF NOT EXISTS idx_follows_following_id ON public.follows(following_id);
 CREATE INDEX IF NOT EXISTS idx_likes_post_id ON public.likes(post_id);
 CREATE INDEX IF NOT EXISTS idx_comments_post_id ON public.comments(post_id);
+CREATE INDEX IF NOT EXISTS idx_posts_moderation_status ON public.posts(moderation_status);
+CREATE INDEX IF NOT EXISTS idx_content_reports_post_id ON public.content_reports(post_id);
+CREATE INDEX IF NOT EXISTS idx_content_reports_status ON public.content_reports(status);
 
 -- Row Level Security (RLS) Policies
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -126,6 +160,8 @@ ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tips ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.follows ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.earnings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.content_reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.creator_agreements ENABLE ROW LEVEL SECURITY;
 
 -- Profiles policies
 CREATE POLICY "Public profiles are viewable by everyone" ON public.profiles
@@ -136,17 +172,19 @@ CREATE POLICY "Users can update own profile" ON public.profiles
 
 -- Posts policies
 CREATE POLICY "Free posts are viewable by everyone" ON public.posts
-    FOR SELECT USING (is_free = true);
+    FOR SELECT USING (is_free = true AND moderation_status != 'removed');
 
 CREATE POLICY "Paid posts viewable by subscribers or creator" ON public.posts
     FOR SELECT USING (
-        is_free = true OR
-        creator_id = auth.uid() OR
-        EXISTS (
-            SELECT 1 FROM public.subscriptions
-            WHERE subscriptions.creator_id = posts.creator_id
-            AND subscriptions.subscriber_id = auth.uid()
-            AND subscriptions.status = 'active'
+        moderation_status != 'removed' AND (
+            is_free = true OR
+            creator_id = auth.uid() OR
+            EXISTS (
+                SELECT 1 FROM public.subscriptions
+                WHERE subscriptions.creator_id = posts.creator_id
+                AND subscriptions.subscriber_id = auth.uid()
+                AND subscriptions.status = 'active'
+            )
         )
     );
 
@@ -231,6 +269,20 @@ CREATE POLICY "Users can send tips" ON public.tips
 -- Earnings policies
 CREATE POLICY "Creators can view own earnings" ON public.earnings
     FOR SELECT USING (creator_id = auth.uid());
+
+-- Content reports policies
+CREATE POLICY "Users can create reports" ON public.content_reports
+    FOR INSERT WITH CHECK (reporter_id = auth.uid());
+
+CREATE POLICY "Users can view own reports" ON public.content_reports
+    FOR SELECT USING (reporter_id = auth.uid());
+
+-- Creator agreements policies
+CREATE POLICY "Users can view own agreements" ON public.creator_agreements
+    FOR SELECT USING (creator_id = auth.uid());
+
+CREATE POLICY "Users can create own agreements" ON public.creator_agreements
+    FOR INSERT WITH CHECK (creator_id = auth.uid());
 
 -- Functions and triggers
 CREATE OR REPLACE FUNCTION public.handle_new_user()

@@ -22,6 +22,35 @@ import Navigation from '../components/Navigation.astro';
       <p class="loading">Loading your feed...</p>
     </div>
   </main>
+
+  <!-- Report Modal -->
+  <div class="report-overlay" id="reportOverlay" style="display:none">
+    <div class="report-modal">
+      <div class="report-header">
+        <h3>Report content</h3>
+        <button class="report-close" id="reportClose">&times;</button>
+      </div>
+      <form id="reportForm">
+        <input type="hidden" id="reportPostId" />
+        <fieldset class="report-reasons">
+          <label><input type="radio" name="reason" value="non_consensual_content" required /> Non-consensual or revenge content</label>
+          <label><input type="radio" name="reason" value="underage_content" /> Involves or appears to involve a minor</label>
+          <label><input type="radio" name="reason" value="copyright_violation" /> Copyright violation</label>
+          <label><input type="radio" name="reason" value="harassment_or_bullying" /> Harassment or bullying</label>
+          <label><input type="radio" name="reason" value="spam_or_scam" /> Spam or scam</label>
+          <label><input type="radio" name="reason" value="impersonation" /> Impersonation</label>
+          <label><input type="radio" name="reason" value="doxxing_personal_info" /> Sharing private info (doxxing)</label>
+          <label><input type="radio" name="reason" value="other" /> Other</label>
+        </fieldset>
+        <textarea id="reportDetails" placeholder="Any extra details (optional)" rows="3" maxlength="500"></textarea>
+        <div class="report-actions">
+          <button type="button" class="btn-cancel" id="reportCancelBtn">Cancel</button>
+          <button type="submit" class="btn-report">Submit Report</button>
+        </div>
+        <p class="report-msg" id="reportMsg"></p>
+      </form>
+    </div>
+  </div>
 </Layout>
 
 <script>
@@ -122,7 +151,12 @@ import Navigation from '../components/Navigation.astro';
                 <p class="post-time">${formatTime(post.created_at)}</p>
               </div>
             </div>
-            <button class="btn-menu">⋮</button>
+            <div class="post-menu-wrap">
+              <button class="btn-menu" data-menu-toggle="${post.id}">⋮</button>
+              <div class="post-dropdown" id="menu-${post.id}">
+                <button class="dropdown-action" data-report="${post.id}">Report</button>
+              </div>
+            </div>
           </div>
 
           <div class="post-content">
@@ -170,6 +204,91 @@ import Navigation from '../components/Navigation.astro';
     if (days < 7) return `${days}d ago`;
     return date.toLocaleDateString();
   }
+
+  // Post menu toggles (delegated)
+  document.addEventListener('click', (e) => {
+    const toggle = (e.target as HTMLElement).closest('[data-menu-toggle]') as HTMLElement;
+    if (toggle) {
+      e.stopPropagation();
+      const id = toggle.getAttribute('data-menu-toggle');
+      const menu = document.getElementById(`menu-${id}`);
+      document.querySelectorAll('.post-dropdown.show').forEach(m => {
+        if (m !== menu) m.classList.remove('show');
+      });
+      menu?.classList.toggle('show');
+      return;
+    }
+
+    const reportBtn = (e.target as HTMLElement).closest('[data-report]') as HTMLElement;
+    if (reportBtn) {
+      const postId = reportBtn.getAttribute('data-report')!;
+      openReport(postId);
+      document.querySelectorAll('.post-dropdown.show').forEach(m => m.classList.remove('show'));
+      return;
+    }
+
+    // Close open menus on outside click
+    document.querySelectorAll('.post-dropdown.show').forEach(m => m.classList.remove('show'));
+  });
+
+  // Report modal
+  const reportOverlay = document.getElementById('reportOverlay')!;
+  const reportForm = document.getElementById('reportForm') as HTMLFormElement;
+  const reportPostId = document.getElementById('reportPostId') as HTMLInputElement;
+  const reportMsg = document.getElementById('reportMsg')!;
+
+  function openReport(postId: string) {
+    reportPostId.value = postId;
+    reportOverlay.style.display = 'flex';
+    reportForm.reset();
+    reportMsg.textContent = '';
+  }
+
+  function closeReport() {
+    reportOverlay.style.display = 'none';
+  }
+
+  document.getElementById('reportClose')?.addEventListener('click', closeReport);
+  document.getElementById('reportCancelBtn')?.addEventListener('click', closeReport);
+  reportOverlay.addEventListener('click', (e) => {
+    if (e.target === reportOverlay) closeReport();
+  });
+
+  reportForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!userId) { window.location.href = '/login'; return; }
+
+    const formData = new FormData(reportForm);
+    const reason = formData.get('reason') as string;
+    const details = (document.getElementById('reportDetails') as HTMLTextAreaElement).value.trim();
+
+    if (!reason) { reportMsg.textContent = 'Pick a reason.'; return; }
+
+    try {
+      const { error } = await supabase.from('content_reports').insert({
+        post_id: reportPostId.value,
+        reporter_id: userId,
+        reason,
+        details: details || null,
+      });
+
+      if (error) {
+        if (error.code === '23505') {
+          reportMsg.textContent = 'You already reported this post.';
+        } else {
+          throw error;
+        }
+      } else {
+        reportMsg.style.color = '#48bb78';
+        reportMsg.textContent = 'Report submitted. We\'ll review it.';
+        setTimeout(closeReport, 1500);
+      }
+    } catch (err) {
+      console.error('Report error:', err);
+      reportMsg.style.color = '#e53e3e';
+      reportMsg.textContent = 'Something went wrong. Try again.';
+    }
+  });
 
   let allPosts: any[] = [];
 
@@ -300,6 +419,10 @@ import Navigation from '../components/Navigation.astro';
     color: #999;
   }
 
+  .post-menu-wrap {
+    position: relative;
+  }
+
   .btn-menu {
     background: none;
     border: none;
@@ -307,6 +430,40 @@ import Navigation from '../components/Navigation.astro';
     cursor: pointer;
     color: #666;
     padding: 0.5rem;
+  }
+
+  .post-dropdown {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    background: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    min-width: 140px;
+    z-index: 10;
+    overflow: hidden;
+  }
+
+  .post-dropdown.show {
+    display: block;
+  }
+
+  .dropdown-action {
+    display: block;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: none;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: #e53e3e;
+    font-family: inherit;
+  }
+
+  .dropdown-action:hover {
+    background: #fef2f2;
   }
 
   .post-content h2 {
@@ -428,5 +585,125 @@ import Navigation from '../components/Navigation.astro';
     .post-actions {
       gap: 1rem;
     }
+  }
+
+  /* Report modal */
+  .report-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+
+  .report-modal {
+    background: white;
+    border-radius: 1rem;
+    max-width: 480px;
+    width: 100%;
+    padding: 2rem;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+
+  .report-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .report-header h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+  }
+
+  .report-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #666;
+    padding: 0.25rem;
+  }
+
+  .report-reasons {
+    border: none;
+    padding: 0;
+    margin: 0 0 1rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .report-reasons label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: #333;
+    cursor: pointer;
+  }
+
+  .report-reasons input[type="radio"] {
+    margin: 0;
+  }
+
+  #reportDetails {
+    width: 100%;
+    padding: 0.75rem;
+    border: 2px solid #e0e0e0;
+    border-radius: 0.5rem;
+    font-family: inherit;
+    font-size: 0.9rem;
+    resize: vertical;
+    margin-bottom: 1rem;
+  }
+
+  #reportDetails:focus {
+    outline: none;
+    border-color: #667eea;
+  }
+
+  .report-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+  }
+
+  .btn-cancel {
+    padding: 0.6rem 1.25rem;
+    background: #f0f0f0;
+    border: none;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    font-weight: 600;
+    font-family: inherit;
+  }
+
+  .btn-report {
+    padding: 0.6rem 1.25rem;
+    background: #e53e3e;
+    color: white;
+    border: none;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    font-weight: 600;
+    font-family: inherit;
+  }
+
+  .btn-report:hover {
+    background: #c53030;
+  }
+
+  .report-msg {
+    margin: 0.75rem 0 0;
+    font-size: 0.85rem;
+    text-align: center;
+    color: #e53e3e;
+    min-height: 1.2rem;
   }
 </style>

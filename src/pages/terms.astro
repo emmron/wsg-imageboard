@@ -1,0 +1,217 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Navigation from '../components/Navigation.astro';
+---
+
+<Layout title="Terms of Service - FanConnect">
+  <Navigation />
+  <main class="terms-page">
+    <div class="container">
+      <h1>Terms of Service</h1>
+      <p class="updated">Effective: March 2026</p>
+
+      <section>
+        <h2>1. What this is</h2>
+        <p>
+          FanConnect is a platform where creators publish content and subscribers
+          pay to access it. By using FanConnect you agree to these terms. If you
+          don't agree, don't use the platform.
+        </p>
+      </section>
+
+      <section>
+        <h2>2. You must be 18+</h2>
+        <p>
+          You must be at least 18 years old to create an account, subscribe,
+          or post content. We will terminate accounts that we believe belong
+          to anyone under 18.
+        </p>
+      </section>
+
+      <section>
+        <h2>3. Your account</h2>
+        <p>
+          You're responsible for your account and everything that happens on it.
+          Use a strong password, don't share your credentials, and let us know
+          immediately if you think someone else has accessed your account.
+        </p>
+      </section>
+
+      <section>
+        <h2>4. Creator responsibilities</h2>
+        <ul>
+          <li>You own the content you upload, or you have a valid licence for it.</li>
+          <li>Every person in your content is 18+ and has given documented consent.</li>
+          <li>You comply with our <a href="/guidelines">Community Guidelines</a> at all times.</li>
+          <li>You're responsible for paying taxes on your earnings. We're not your accountant.</li>
+          <li>You don't make promises to subscribers you can't keep.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>5. Subscriber responsibilities</h2>
+        <ul>
+          <li>Don't redistribute, re-upload, or share content you've paid for. It's not yours to distribute.</li>
+          <li>Don't screen-record or screenshot content to share elsewhere.</li>
+          <li>Don't harass creators through comments or messages.</li>
+          <li>Chargebacks for content you accessed and consumed are not okay.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>6. Payments</h2>
+        <p>
+          Payments are processed through Stripe. Subscription fees are billed monthly.
+          Creators receive their earnings minus our platform fee. Refund requests
+          are handled case-by-case — we're fair about it, but we don't do blanket refunds
+          for content you've already viewed.
+        </p>
+      </section>
+
+      <section>
+        <h2>7. Content ownership</h2>
+        <p>
+          You keep ownership of what you upload. By posting on FanConnect, you give
+          us a licence to host, display, and distribute it through the platform.
+          That licence ends when you delete your content or close your account.
+          We don't sell your content or use it for anything outside the platform.
+        </p>
+      </section>
+
+      <section>
+        <h2>8. Takedowns and removal</h2>
+        <p>
+          We respond to valid copyright takedown requests. If you're featured in
+          content and want it removed, contact us with proof of identity. Creators
+          who repeatedly ignore takedown requests will be banned.
+        </p>
+      </section>
+
+      <section>
+        <h2>9. Termination</h2>
+        <p>
+          We can suspend or terminate accounts that violate these terms or our
+          community guidelines. If we ban you for a zero-tolerance violation
+          (see <a href="/guidelines">guidelines</a>), any pending earnings may
+          be forfeited. You can also delete your account at any time through settings.
+        </p>
+      </section>
+
+      <section>
+        <h2>10. Liability</h2>
+        <p>
+          We provide the platform as-is. We do our best to keep things running
+          and your data safe, but we can't guarantee 100% uptime or that nothing
+          will ever go wrong. We're not liable for content posted by users — that's
+          on them. If you see something that shouldn't be here, report it and we'll
+          deal with it.
+        </p>
+      </section>
+
+      <section>
+        <h2>11. Changes</h2>
+        <p>
+          We may update these terms. When we do, we'll post the new version here
+          and update the date at the top. Continuing to use the platform means
+          you accept the updated terms.
+        </p>
+      </section>
+
+      <div class="terms-footer">
+        <p>Questions about these terms? Email <a href="mailto:legal@fanconnect.com">legal@fanconnect.com</a></p>
+      </div>
+    </div>
+  </main>
+</Layout>
+
+<style>
+  .terms-page {
+    margin-top: 60px;
+    min-height: calc(100vh - 60px);
+    background: #f8f9fa;
+  }
+
+  .container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 3rem 2rem;
+  }
+
+  h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin: 0 0 0.5rem 0;
+  }
+
+  .updated {
+    color: #999;
+    font-size: 0.9rem;
+    margin-bottom: 3rem;
+  }
+
+  section {
+    margin-bottom: 2.5rem;
+  }
+
+  h2 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin: 0 0 0.75rem 0;
+  }
+
+  p {
+    color: #444;
+    line-height: 1.7;
+    margin-bottom: 0.75rem;
+  }
+
+  ul {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  li {
+    color: #444;
+    line-height: 1.6;
+    padding-left: 1.5rem;
+    position: relative;
+  }
+
+  li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.6rem;
+    width: 6px;
+    height: 6px;
+    background: #667eea;
+    border-radius: 50%;
+  }
+
+  a {
+    color: #667eea;
+    font-weight: 600;
+  }
+
+  .terms-footer {
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 1px solid #e0e0e0;
+    text-align: center;
+  }
+
+  @media (max-width: 768px) {
+    .container {
+      padding: 2rem 1rem;
+    }
+
+    h1 {
+      font-size: 2rem;
+    }
+  }
+</style>

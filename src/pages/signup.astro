@@ -86,6 +86,13 @@ import Layout from '../layouts/Layout.astro';
           </label>
         </div>
 
+        <div class="form-group checkbox-group">
+          <label>
+            <input type="checkbox" id="agreeTerms" name="agreeTerms" required />
+            <span>I'm 18+ and agree to the <a href="/terms" target="_blank">Terms</a> and <a href="/guidelines" target="_blank">Guidelines</a></span>
+          </label>
+        </div>
+
         <div id="errorMessage" class="error-message"></div>
 
         <button type="submit" class="btn-primary" id="submitBtn">
@@ -118,6 +125,14 @@ import Layout from '../layouts/Layout.astro';
     const displayName = formData.get('displayName') as string;
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
+
+    const agreeTerms = (document.getElementById('agreeTerms') as HTMLInputElement).checked;
+
+    if (!agreeTerms) {
+      errorMessage.style.color = '#e53e3e';
+      errorMessage.textContent = 'You must agree to the Terms and Guidelines.';
+      return;
+    }
 
     errorMessage.textContent = '';
     submitBtn.disabled = true;

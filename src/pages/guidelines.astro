@@ -1,0 +1,211 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Navigation from '../components/Navigation.astro';
+---
+
+<Layout title="Community Guidelines - FanConnect">
+  <Navigation />
+  <main class="guidelines-page">
+    <div class="container">
+      <h1>Community Guidelines</h1>
+      <p class="updated">Last updated: March 2026</p>
+
+      <section>
+        <h2>The short version</h2>
+        <p>
+          FanConnect exists so creators can share their work and get paid for it.
+          We want this to be a good place for everyone involved. That means a few
+          hard rules and some common sense.
+        </p>
+      </section>
+
+      <section>
+        <h2>What you can post</h2>
+        <ul>
+          <li>Your own original work — videos, photos, writing, audio, whatever you make</li>
+          <li>Content where every person featured is over 18 and agreed to be in it</li>
+          <li>Licensed or royalty-free stuff, properly credited</li>
+          <li>Behind-the-scenes, tutorials, commentary, entertainment</li>
+        </ul>
+      </section>
+
+      <section class="hard-rules">
+        <h2>What will get you banned</h2>
+        <p>Zero tolerance. No warnings. We will remove the content and your account.</p>
+        <ul>
+          <li><strong>Anything involving minors.</strong> No exceptions, no context where this is okay.</li>
+          <li><strong>Non-consensual content.</strong> Revenge porn, hidden cameras, creepshots, anything uploaded without the subject's knowledge and consent.</li>
+          <li><strong>Stolen content.</strong> If you didn't make it and don't have a license, don't upload it. Ripping another creator's work is theft.</li>
+          <li><strong>Doxxing.</strong> Posting someone's real name, address, phone number, or private info without their consent.</li>
+          <li><strong>Blackmail or extortion.</strong> Using content to threaten or coerce anyone.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>What will get your content removed</h2>
+        <ul>
+          <li>Copyright claims from the actual owner — we honour valid takedowns</li>
+          <li>Spam, scam links, or phishing</li>
+          <li>Impersonating another creator or public figure</li>
+          <li>Intentionally misleading titles or tags to bait clicks</li>
+          <li>Harassment or targeted abuse in comments or messages</li>
+          <li>Content that promotes violence or discrimination</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>If you're a creator</h2>
+        <p>You're running a business on this platform. That comes with responsibility.</p>
+        <ul>
+          <li>Everyone in your content must be 18+. Keep records of consent — you may be asked to provide them.</li>
+          <li>If someone featured in your content asks you to take it down, do it. If you don't, we will.</li>
+          <li>Be honest about what subscribers are getting. Don't overpromise and underdeliver.</li>
+          <li>Tag your content accurately. Misleading tags hurt everyone.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Reporting content</h2>
+        <p>
+          See something that breaks these rules? Use the report button on any post.
+          We review every report. If something involves a minor or non-consensual content,
+          we escalate it immediately and report to the relevant authorities where required by law.
+        </p>
+      </section>
+
+      <section>
+        <h2>What happens when you break the rules</h2>
+        <p>Depends on what you did.</p>
+        <ul>
+          <li><strong>Minor stuff</strong> (misleading tags, light spam) — we'll remove the content and let you know why</li>
+          <li><strong>Serious stuff</strong> (copyright, harassment) — content removed, account suspended, possible permanent ban</li>
+          <li><strong>Zero tolerance stuff</strong> (minors, non-consensual, doxxing) — immediate permanent ban and reported to authorities</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Appeals</h2>
+        <p>
+          If you think we got it wrong, you can appeal. We're human, we make mistakes.
+          But if the content clearly violates our zero-tolerance rules, the decision is final.
+        </p>
+      </section>
+
+      <div class="guidelines-footer">
+        <p>Questions? Contact us at <a href="mailto:support@fanconnect.com">support@fanconnect.com</a></p>
+      </div>
+    </div>
+  </main>
+</Layout>
+
+<style>
+  .guidelines-page {
+    margin-top: 60px;
+    min-height: calc(100vh - 60px);
+    background: #f8f9fa;
+  }
+
+  .container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 3rem 2rem;
+  }
+
+  h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin: 0 0 0.5rem 0;
+  }
+
+  .updated {
+    color: #999;
+    font-size: 0.9rem;
+    margin-bottom: 3rem;
+  }
+
+  section {
+    margin-bottom: 2.5rem;
+  }
+
+  h2 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin: 0 0 1rem 0;
+  }
+
+  p {
+    color: #444;
+    line-height: 1.7;
+    margin-bottom: 1rem;
+  }
+
+  ul {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  li {
+    color: #444;
+    line-height: 1.6;
+    padding-left: 1.5rem;
+    position: relative;
+  }
+
+  li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.6rem;
+    width: 6px;
+    height: 6px;
+    background: #667eea;
+    border-radius: 50%;
+  }
+
+  .hard-rules {
+    background: white;
+    padding: 2rem;
+    border-radius: 1rem;
+    border-left: 4px solid #e53e3e;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+
+  .hard-rules h2 {
+    color: #e53e3e;
+  }
+
+  .hard-rules li::before {
+    background: #e53e3e;
+  }
+
+  .guidelines-footer {
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 1px solid #e0e0e0;
+    text-align: center;
+  }
+
+  .guidelines-footer a {
+    color: #667eea;
+    font-weight: 600;
+  }
+
+  @media (max-width: 768px) {
+    .container {
+      padding: 2rem 1rem;
+    }
+
+    h1 {
+      font-size: 2rem;
+    }
+
+    .hard-rules {
+      padding: 1.5rem;
+    }
+  }
+</style>

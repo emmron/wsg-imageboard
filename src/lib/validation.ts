@@ -1,18 +1,22 @@
 // Client-side validation helpers
+import { checkContent, checkFilename, validateUploadContent, type ViolationType } from './content-policy';
 
 export interface ValidationResult {
   valid: boolean;
   errors: string[];
   warnings: string[];
   cleanTags?: string[];
+  violations?: ViolationType[];
 }
 
 export const VALIDATION_RULES = {
-  maxFileSize: 2 * 1024 * 1024 * 1024, // 2GB - YouTube allows up to 256GB, but we'll be more conservative
+  maxFileSize: 2 * 1024 * 1024 * 1024, // 2GB
   maxTitleLength: 100,
+  maxDescriptionLength: 2000,
   maxTagLength: 30,
   maxTags: 10,
   maxCommentLength: 1000,
+  minPasswordLength: 8,
   // Comprehensive video format support - covers all major formats like YouTube
   allowedVideoTypes: [
     // Primary web formats
@@ -81,12 +85,12 @@ export const VALIDATION_RULES = {
   ],
   // Priority formats for conversion (web-friendly)
   preferredOutputFormats: ['video/mp4', 'video/webm'],
-  bannedKeywords: [
-    // Add problematic terms that should trigger warnings
-    'leak', 'leaked', 'stolen', 'hacked', 'revenge',
-    'underage', 'minor', 'child', 'kid',
-    'private', 'personal', 'secret'
-  ]
+  // Image format support
+  allowedImageTypes: [
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif',
+  ],
+  allowedImageExtensions: ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif'],
+  maxImageSize: 50 * 1024 * 1024, // 50MB
 };
 
 export function validateFile(file: File | null): ValidationResult {
@@ -127,10 +131,10 @@ export function validateFile(file: File | null): ValidationResult {
     warnings.push('Large file detected. Upload may take longer and processing time will be extended.');
   }
   
-  // Filename check for suspicious content
-  const suspiciousPatterns = /(?:leak|stolen|hack|revenge|private|personal)/i;
-  if (suspiciousPatterns.test(file.name)) {
-    errors.push('Filename contains inappropriate content');
+  // Filename content policy check
+  const filenameCheck = checkFilename(file.name);
+  if (filenameCheck.blocked) {
+    errors.push(filenameCheck.warnings[0] || 'Filename violates content policy');
   }
   
   // Basic file integrity check
@@ -313,26 +317,24 @@ function formatFileSize(bytes: number): string {
 export function validateTitle(title: string): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
-  
+
   if (!title || title.trim().length === 0) {
     errors.push('Title is required');
     return { valid: false, errors, warnings };
   }
-  
+
   if (title.length > VALIDATION_RULES.maxTitleLength) {
     errors.push(`Title too long. Max ${VALIDATION_RULES.maxTitleLength} characters.`);
   }
-  
-  // Check for banned keywords
-  const lowerTitle = title.toLowerCase();
-  const foundKeywords = VALIDATION_RULES.bannedKeywords.filter(keyword => 
-    lowerTitle.includes(keyword.toLowerCase())
-  );
-  
-  if (foundKeywords.length > 0) {
-    warnings.push('Title may contain inappropriate content. Please review community guidelines.');
+
+  // Content policy check - blocks prohibited content, warns on suspicious
+  const policyCheck = checkContent(title);
+  if (policyCheck.blocked) {
+    errors.push('Title violates community guidelines and cannot be used.');
+    return { valid: false, errors, warnings, violations: policyCheck.violations };
   }
-  
+  warnings.push(...policyCheck.warnings);
+
   return {
     valid: errors.length === 0,
     errors,
@@ -343,41 +345,39 @@ export function validateTitle(title: string): ValidationResult {
 export function validateTags(tagsString: string): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
-  
+
   if (!tagsString || tagsString.trim().length === 0) {
     return { valid: true, errors: [], warnings: [], cleanTags: [] };
   }
-  
+
   const tags = tagsString.split(',')
     .map(tag => tag.trim())
     .filter(tag => tag.length > 0);
-  
+
   if (tags.length > VALIDATION_RULES.maxTags) {
     errors.push(`Too many tags. Max ${VALIDATION_RULES.maxTags} allowed.`);
   }
-  
+
   const longTags = tags.filter(tag => tag.length > VALIDATION_RULES.maxTagLength);
   if (longTags.length > 0) {
     errors.push(`Tags too long. Max ${VALIDATION_RULES.maxTagLength} characters per tag.`);
   }
-  
-  // Check tags for inappropriate content
-  const problematicTags = tags.filter(tag => {
-    const lowerTag = tag.toLowerCase();
-    return VALIDATION_RULES.bannedKeywords.some(keyword => 
-      lowerTag.includes(keyword.toLowerCase())
-    );
-  });
-  
-  if (problematicTags.length > 0) {
-    warnings.push('Some tags may be inappropriate. Consider reviewing them.');
+
+  // Content policy check on each tag
+  for (const tag of tags) {
+    const policyCheck = checkContent(tag);
+    if (policyCheck.blocked) {
+      errors.push(`Tag "${tag}" violates community guidelines.`);
+      return { valid: false, errors, warnings, violations: policyCheck.violations };
+    }
+    warnings.push(...policyCheck.warnings);
   }
-  
-  // Clean tags (basic sanitization)
+
+  // Clean tags (sanitize HTML)
   const cleanTags = tags
-    .map(tag => tag.replace(/[<>]/g, '')) // Remove potential HTML
+    .map(tag => sanitizeText(tag))
     .filter(tag => tag.length > 0);
-  
+
   return {
     valid: errors.length === 0,
     errors,
@@ -389,38 +389,69 @@ export function validateTags(tagsString: string): ValidationResult {
 export function validateComment(text: string): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
-  
+
   if (!text || text.trim().length === 0) {
     errors.push('Comment cannot be empty');
     return { valid: false, errors, warnings };
   }
-  
+
   if (text.length > VALIDATION_RULES.maxCommentLength) {
     errors.push(`Comment too long. Max ${VALIDATION_RULES.maxCommentLength} characters.`);
   }
-  
-  // Check for problematic content
-  const lowerText = text.toLowerCase();
-  const foundKeywords = VALIDATION_RULES.bannedKeywords.filter(keyword => 
-    lowerText.includes(keyword.toLowerCase())
-  );
-  
-  if (foundKeywords.length > 0) {
-    warnings.push('Comment may contain inappropriate content.');
+
+  // Content policy check
+  const policyCheck = checkContent(text);
+  if (policyCheck.blocked) {
+    errors.push('Comment violates community guidelines.');
+    return { valid: false, errors, warnings, violations: policyCheck.violations };
   }
-  
-  // Basic spam detection
-  const repeatedChars = /(.)\1{10,}/; // 10+ repeated characters
-  const capsLock = /[A-Z]{20,}/; // 20+ consecutive caps
-  
+  warnings.push(...policyCheck.warnings);
+
+  // Spam detection
+  const repeatedChars = /(.)\1{10,}/;
+  const capsLock = /[A-Z]{20,}/;
+  const linkSpam = /(https?:\/\/[^\s]+){4,}/; // 4+ links
+
   if (repeatedChars.test(text) || capsLock.test(text)) {
-    warnings.push('Comment appears to be spam-like.');
+    warnings.push('Comment appears to be spam.');
   }
-  
+  if (linkSpam.test(text)) {
+    warnings.push('Comment contains excessive links and may be flagged as spam.');
+  }
+
   return {
     valid: errors.length === 0,
     errors,
     warnings
+  };
+}
+
+/**
+ * Validate a full upload (title + tags + filename) against content policy.
+ */
+export function validateUpload(title: string, tags: string, filename: string): ValidationResult {
+  const contentCheck = validateUploadContent(title, tags, filename);
+  if (contentCheck.blocked) {
+    return {
+      valid: false,
+      errors: contentCheck.warnings.length > 0 ? contentCheck.warnings : ['Content violates community guidelines.'],
+      warnings: [],
+      violations: contentCheck.violations,
+    };
+  }
+
+  // Run individual field validations
+  const titleResult = validateTitle(title);
+  if (!titleResult.valid) return titleResult;
+
+  const tagsResult = validateTags(tags);
+  if (!tagsResult.valid) return tagsResult;
+
+  return {
+    valid: true,
+    errors: [],
+    warnings: [...titleResult.warnings, ...tagsResult.warnings, ...contentCheck.warnings],
+    cleanTags: tagsResult.cleanTags,
   };
 }
 

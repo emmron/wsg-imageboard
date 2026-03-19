@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
+import { validateUploadContent, checkFilename } from '../../../lib/content-policy';
 
-export const prerender = false; // Enable server-side processing
+export const prerender = false;
 
 // Use environment variable to determine storage method
 const USE_CLOUD_STORAGE = process.env.VERCEL_ENV === 'production' || process.env.USE_CLOUD_STORAGE === 'true';
@@ -140,6 +141,18 @@ export const POST: APIRoute = async ({ request }) => {
       });
     }
 
+    // Content policy check on title, tags, and filename
+    const contentCheck = validateUploadContent(title, tags || '', videoFile.name);
+    if (contentCheck.blocked) {
+      return new Response(JSON.stringify({
+        success: false,
+        message: contentCheck.warnings[0] || 'Content violates community guidelines.'
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     // Sanitize filename to prevent path traversal
     const safeFileName = sanitizeFileName(videoFile.name);
     if (!safeFileName) {
@@ -227,12 +240,7 @@ export const POST: APIRoute = async ({ request }) => {
 };
 
 function generateVideoId(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  for (let i = 0; i < 11; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
+  return crypto.randomUUID().replace(/-/g, '').substring(0, 11);
 }
 
 function getFileExtension(filename: string): string {
