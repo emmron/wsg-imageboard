@@ -156,7 +156,7 @@ async function assembleChunksToCloud(session: any): Promise<string> {
         }
       } else {
         // Development environment - use local storage
-        return await this.fallbackToLocalAssembly(session, combinedBuffer);
+        return await fallbackToLocalAssembly(session, combinedBuffer);
       }
     } catch (error) {
       console.error('Cloud storage upload failed completely:', error);
@@ -166,9 +166,6 @@ async function assembleChunksToCloud(session: any): Promise<string> {
     console.error('Cloud assembly failed:', error);
     throw error;
   }
-  
-  // Make fallback function available to the main assembly logic
-  (assembleChunksToCloud as any).fallbackToLocalAssembly = fallbackToLocalAssembly;
 }
 
 // Local file assembly (development only)

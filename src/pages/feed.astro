@@ -1,8 +1,10 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import Navigation from '../components/Navigation.astro';
 ---
 
-<Layout title="Your Feed - Premium Content">
+<Layout title="Your Feed - FanConnect">
+  <Navigation />
   <main class="feed-container">
     <div class="feed-header">
       <h1>Your Feed</h1>
@@ -81,7 +83,8 @@ import Layout from '../layouts/Layout.astro';
 
       if (postsError) throw postsError;
 
-      renderPosts(posts);
+      allPosts = posts || [];
+      renderPosts(allPosts);
 
     } catch (error) {
       console.error('Error loading feed:', error);
@@ -168,6 +171,8 @@ import Layout from '../layouts/Layout.astro';
     return date.toLocaleDateString();
   }
 
+  let allPosts: any[] = [];
+
   // Filter buttons
   document.querySelectorAll('.filter-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -175,7 +180,11 @@ import Layout from '../layouts/Layout.astro';
       btn.classList.add('active');
 
       const filter = btn.getAttribute('data-filter');
-      // TODO: Implement filtering
+      if (filter === 'all') {
+        renderPosts(allPosts);
+      } else {
+        renderPosts(allPosts.filter(post => post.content_type === filter));
+      }
     });
   });
 </script>
@@ -185,6 +194,7 @@ import Layout from '../layouts/Layout.astro';
     max-width: 800px;
     margin: 0 auto;
     padding: 2rem 1rem;
+    margin-top: 60px;
   }
 
   .feed-header {

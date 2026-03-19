@@ -17,23 +17,37 @@ injectSpeedInsights();
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="description" content="Share and discover beautiful videos" />
+    <meta name="description" content="FanConnect - Connect with your favorite creators and discover exclusive content" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>{title}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Helvetica+Neue:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   </head>
   <body>
     <div id="app">
       <slot />
+      <footer class="site-footer">
+        <div class="footer-inner">
+          <div class="footer-brand">
+            <span class="footer-logo">FanConnect</span>
+            <p class="footer-tagline">Connect with your favorite creators</p>
+          </div>
+          <div class="footer-links">
+            <a href="/explore">Explore</a>
+            <a href="/channels">Channels</a>
+            <a href="/signup">Get Started</a>
+          </div>
+          <p class="footer-copy">&copy; 2026 FanConnect. All rights reserved.</p>
+        </div>
+      </footer>
     </div>
   </body>
 </html>
 
 <style is:global>
-  /* Classic Vimeo Global Styles */
+  /* FanConnect Global Styles */
   * {
     margin: 0;
     padding: 0;
@@ -41,7 +55,7 @@ injectSpeedInsights();
   }
 
   body {
-    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-family: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
     font-size: 14px;
     line-height: 1.5;
     color: #333333;
@@ -54,7 +68,7 @@ injectSpeedInsights();
 
   /* Typography */
   h1, h2, h3, h4, h5, h6 {
-    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-family: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
     font-weight: 300;
     letter-spacing: -0.02em;
     margin: 0;
@@ -389,6 +403,56 @@ injectSpeedInsights();
     .modal-title {
       font-size: 18px;
     }
+  }
+
+  /* Footer */
+  .site-footer {
+    background: #1a1a2e;
+    color: #a0a0b0;
+    padding: 3rem 2rem 2rem;
+    margin-top: auto;
+  }
+
+  .footer-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    text-align: center;
+  }
+
+  .footer-logo {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #667eea;
+  }
+
+  .footer-tagline {
+    margin: 0.5rem 0 1.5rem;
+    font-size: 0.9rem;
+  }
+
+  .footer-links {
+    display: flex;
+    gap: 2rem;
+    justify-content: center;
+    margin-bottom: 2rem;
+  }
+
+  .footer-links a {
+    color: #a0a0b0;
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: color 0.2s;
+  }
+
+  .footer-links a:hover {
+    color: #667eea;
+  }
+
+  .footer-copy {
+    font-size: 0.8rem;
+    color: #666;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    padding-top: 1.5rem;
   }
 
   /* Smooth Animations */
